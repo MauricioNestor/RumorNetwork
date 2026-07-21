@@ -1,9 +1,10 @@
-﻿using System;
+﻿using RumorNetwork.Rumors;
+using RumorNetwork.Structures;
+using System;
 using System.Collections.Generic;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
-using RumorNetwork.Structures;
 
 namespace RumorNetwork
 {
@@ -82,6 +83,16 @@ namespace RumorNetwork
                 .RequiresPlayer()
                 .RequiresPrivilege(Privilege.chat)
                 .HandleWith(args => GroupCurrentRegion(api, args))
+                .EndSubCommand();
+
+            rumorCommand
+                .BeginSubCommand("sites")
+                .WithDescription(
+                    "Lista os locais elegíveis para rumores na região atual."
+                )
+                .RequiresPlayer()
+                .RequiresPrivilege(Privilege.chat)
+                .HandleWith(args => ListRumorSites(api, args))
                 .EndSubCommand();
 
             Mod.Logger.Notification(
@@ -372,6 +383,63 @@ namespace RumorNetwork
 
             return TextCommandResult.Success(
                 $"{villageGroups.Count} vilas encontradas. " +
+                "Veja o console."
+            );
+        }
+
+        private TextCommandResult ListRumorSites(
+            ICoreServerAPI api,
+            TextCommandCallingArgs args
+        )
+        {
+            BlockPos playerPos =
+                args.Caller.Entity.Pos.AsBlockPos;
+
+            long regionIndex =
+                api.WorldManager.MapRegionIndex2DByBlockPos(
+                    playerPos.X,
+                    playerPos.Z
+                );
+
+            IMapRegion region =
+                api.WorldManager.GetMapRegion(regionIndex);
+
+            if (region == null)
+            {
+                return TextCommandResult.Error(
+                    "A região atual não está carregada."
+                );
+            }
+
+            List<RumorSite> sites =
+                RumorSiteBuilder.Build(
+                    region.GeneratedStructures
+                );
+
+            Mod.Logger.Notification(
+                "=== Rumor Network: locais vendáveis ==="
+            );
+
+            for (int index = 0; index < sites.Count; index++)
+            {
+                RumorSite site = sites[index];
+                Cuboidi box = site.Location;
+                Vec3i center = site.Center;
+
+                Mod.Logger.Notification(
+                    $"[{index}] " +
+                    $"Kind={site.Kind} | " +
+                    $"Family={site.Family} | " +
+                    $"Parts={site.PartCount} | " +
+                    $"Center={center.X},{center.Y},{center.Z} | " +
+                    $"Box=({box.X1},{box.Y1},{box.Z1})-" +
+                    $"({box.X2},{box.Y2},{box.Z2}) | " +
+                    $"Id={site.Id}"
+                );
+            }
+
+            return TextCommandResult.Success(
+                $"{sites.Count} locais elegíveis encontrados. " +
                 "Veja o console."
             );
         }

@@ -1,16 +1,16 @@
-﻿namespace RumorNetwork.Structures;
-
-public enum StructureKind
+﻿public enum StructureKind
 {
     Trader,
     UndergroundRuin,
     BetterRuin,
+    SurfaceRuin,
     Vug,
-    VillagePart, 
+    VillagePart,
     RuinedVillage,
     BuriedTreasure,
     Translocator,
     Gate,
     UndergroundLake,
+    StoryStructure,
     Unknown
 }

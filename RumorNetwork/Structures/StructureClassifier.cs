@@ -58,6 +58,21 @@ public static class StructureClassifier
         {
             return StructureKind.UndergroundLake;
         }
+        if (
+            code.Contains("/surrfaceruins") ||
+            code.Contains("/surfaceruins")
+        )
+        {
+            return StructureKind.SurfaceRuin;
+        }
+
+        if (
+            group == "storystructure" ||
+            code.Contains(":game:story/")
+        )
+        {
+            return StructureKind.StoryStructure;
+        }
 
         return StructureKind.Unknown;
     }
