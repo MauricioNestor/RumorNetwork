@@ -88,11 +88,19 @@ namespace RumorNetwork.Caves
             Block block
         )
         {
-            return string.Equals(
-                block.Code?.Path,
-                "chiseledblock",
-                StringComparison.OrdinalIgnoreCase
-            );
+            string? path = block.Code?.Path;
+
+            return
+                string.Equals(
+                    path,
+                    "chiseledblock",
+                    StringComparison.OrdinalIgnoreCase
+                ) ||
+                string.Equals(
+                    path,
+                    "microblock",
+                    StringComparison.OrdinalIgnoreCase
+                );
         }
 
         private static bool HasFullBlockCollision(
