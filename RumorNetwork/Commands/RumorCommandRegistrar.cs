@@ -1,3 +1,4 @@
+using RumorNetwork.Catalog;
 using RumorNetwork.Caves;
 using RumorNetwork.Offers;
 using RumorNetwork.Purchases;
@@ -21,6 +22,7 @@ namespace RumorNetwork.Commands
             TraderLocationPurchaseService
                 traderLocationPurchaseService,
             TraderKnowledgeRegistry traderKnowledgeRegistry,
+            SelectiveStructureCatalogService catalogService,
             CaveCellClassifier caveCellClassifier,
             CaveBoundaryScanner caveBoundaryScanner,
             CaveSkyConnectionSearch caveSkyConnectionSearch,
@@ -82,6 +84,11 @@ namespace RumorNetwork.Commands
                 logger,
                 rumorRegistry,
                 regionSearchRadius
+            ).Register(rumorCommand);
+
+            new RumorCatalogCommands(
+                rumorRegistry,
+                catalogService
             ).Register(rumorCommand);
 
             new RumorDeliveryCommands(
