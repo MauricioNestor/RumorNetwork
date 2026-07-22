@@ -123,9 +123,22 @@ namespace RumorNetwork.Traders
 
             if (!targetFound || target == null)
             {
+                int indexedTraderCount =
+                    selector.CountIndexedTraders();
+
+                int knownTraderCount =
+                    selector.CountKnownIndexedTraders(
+                        knowledge
+                    );
+
                 error =
-                    "Este comerciante não conhece nenhum outro " +
-                    "comerciante que você ainda não tenha localizado.";
+                    "Não há outro comerciante indexado que " +
+                    "você ainda não conheça. " +
+                    $"Indexados={indexedTraderCount} | " +
+                    $"Conhecidos={knownTraderCount}. " +
+                    "Novos comerciantes entram no catálogo " +
+                    "quando /rumor index é executado em " +
+                    "regiões carregadas.";
 
                 return false;
             }
