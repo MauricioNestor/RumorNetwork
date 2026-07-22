@@ -1,8 +1,10 @@
 using RumorNetwork.Caves;
 using RumorNetwork.Commands;
 using RumorNetwork.Configuration;
+using RumorNetwork.Offers;
 using RumorNetwork.Purchases;
 using RumorNetwork.Rumors;
+using RumorNetwork.Traders;
 using Vintagestory.API.Common;
 using Vintagestory.API.Server;
 
@@ -13,13 +15,22 @@ namespace RumorNetwork
         private const string RumorRegistrySaveKey =
             "rumornetwork:registry-v1";
 
+        private const string TraderKnowledgeSaveKey =
+            "rumornetwork:trader-knowledge-v1";
+
         private readonly RumorRegistry rumorRegistry =
             new();
+
+        private readonly TraderKnowledgeRegistry
+            traderKnowledgeRegistry = new();
 
         private ICoreServerAPI serverApi = null!;
         private RumorTargetResolver rumorTargetResolver = null!;
         private RumorDeliveryService rumorDeliveryService = null!;
         private RumorPurchaseService rumorPurchaseService = null!;
+        private RumorOfferService rumorOfferService = null!;
+        private TraderLocationPurchaseService
+            traderLocationPurchaseService = null!;
         private CaveCellClassifier caveCellClassifier = null!;
         private CaveBoundaryScanner caveBoundaryScanner = null!;
         private CaveSkyConnectionSearch caveSkyConnectionSearch = null!;
@@ -89,6 +100,27 @@ namespace RumorNetwork
                     paymentService
                 );
 
+            rumorOfferService =
+                new RumorOfferService(
+                    config,
+                    priceResolver
+                );
+
+            TraderLocationSelector traderSelector =
+                new(rumorRegistry);
+
+            traderLocationPurchaseService =
+                new TraderLocationPurchaseService(
+                    api,
+                    Mod.Logger,
+                    config,
+                    rumorTargetResolver,
+                    priceResolver,
+                    paymentService,
+                    traderKnowledgeRegistry,
+                    traderSelector
+                );
+
             api.Event.SaveGameLoaded +=
                 OnSaveGameLoaded;
 
@@ -102,6 +134,8 @@ namespace RumorNetwork
                 rumorTargetResolver,
                 rumorDeliveryService,
                 rumorPurchaseService,
+                rumorOfferService,
+                traderLocationPurchaseService,
                 caveCellClassifier,
                 caveBoundaryScanner,
                 caveSkyConnectionSearch,
@@ -115,13 +149,23 @@ namespace RumorNetwork
 
         private void OnSaveGameLoaded()
         {
-            RumorRegistrySaveData saveData =
+            RumorRegistrySaveData rumorSaveData =
                 serverApi.WorldManager.SaveGame.GetData(
                     RumorRegistrySaveKey,
                     new RumorRegistrySaveData()
                 );
 
-            rumorRegistry.Import(saveData);
+            rumorRegistry.Import(rumorSaveData);
+
+            TraderKnowledgeSaveData traderSaveData =
+                serverApi.WorldManager.SaveGame.GetData(
+                    TraderKnowledgeSaveKey,
+                    new TraderKnowledgeSaveData()
+                );
+
+            traderKnowledgeRegistry.Import(
+                traderSaveData
+            );
 
             Mod.Logger.Notification(
                 $"Rumor Network carregou " +
@@ -131,12 +175,20 @@ namespace RumorNetwork
 
         private void OnGameWorldSave()
         {
-            RumorRegistrySaveData saveData =
+            RumorRegistrySaveData rumorSaveData =
                 rumorRegistry.Export();
 
             serverApi.WorldManager.SaveGame.StoreData(
                 RumorRegistrySaveKey,
-                saveData
+                rumorSaveData
+            );
+
+            TraderKnowledgeSaveData traderSaveData =
+                traderKnowledgeRegistry.Export();
+
+            serverApi.WorldManager.SaveGame.StoreData(
+                TraderKnowledgeSaveKey,
+                traderSaveData
             );
         }
     }
