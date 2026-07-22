@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using RumorNetwork.Catalog;
 using RumorNetwork.Rumors;
 using Vintagestory.API.Server;
 
@@ -15,15 +16,20 @@ namespace RumorNetwork.Purchases
         private readonly RumorInventoryPaymentService
             paymentService;
 
+        private readonly SelectiveStructureCatalogService
+            catalogService;
+
         public RumorPurchaseService(
             RumorDeliveryService deliveryService,
             RumorPriceResolver priceResolver,
-            RumorInventoryPaymentService paymentService
+            RumorInventoryPaymentService paymentService,
+            SelectiveStructureCatalogService catalogService
         )
         {
             this.deliveryService = deliveryService;
             this.priceResolver = priceResolver;
             this.paymentService = paymentService;
+            this.catalogService = catalogService;
         }
 
         public bool TryPurchase(
@@ -35,6 +41,11 @@ namespace RumorNetwork.Purchases
         {
             result = null;
             error = string.Empty;
+
+            catalogService.RequestBackfillAround(
+                (int)player.Entity.Pos.X,
+                (int)player.Entity.Pos.Z
+            );
 
             bool prepared =
                 deliveryService.TryPrepare(
@@ -49,7 +60,14 @@ namespace RumorNetwork.Purchases
                 preparedDelivery == null
             )
             {
-                error = preparationError;
+                error = catalogService.IsWorking
+                    ? preparationError +
+                        " O catálogo remoto ainda está " +
+                        "verificando traders e translocadores " +
+                        $"em {catalogService.PendingRegionCount} " +
+                        "regiões já geradas."
+                    : preparationError;
+
                 return false;
             }
 
