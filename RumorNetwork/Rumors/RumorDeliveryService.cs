@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
@@ -33,6 +34,50 @@ namespace RumorNetwork.Rumors
         )
         {
             deliveredRecord = null;
+
+            bool prepared =
+                TryPrepare(
+                    knowledge,
+                    out RumorPreparedDelivery?
+                        preparedDelivery,
+                    out error
+                );
+
+            if (
+                !prepared ||
+                preparedDelivery == null
+            )
+            {
+                return false;
+            }
+
+            bool delivered =
+                TryDeliverPrepared(
+                    player,
+                    preparedDelivery,
+                    out _,
+                    out error
+                );
+
+            if (!delivered)
+            {
+                return false;
+            }
+
+            deliveredRecord =
+                preparedDelivery.Record;
+
+            return true;
+        }
+
+        public bool TryPrepare(
+            RumorKnowledgeLevel knowledge,
+            out RumorPreparedDelivery?
+                preparedDelivery,
+            out string error
+        )
+        {
+            preparedDelivery = null;
             error = string.Empty;
 
             if (knowledge == RumorKnowledgeLevel.NotSold)
@@ -92,54 +137,13 @@ namespace RumorNetwork.Rumors
                     continue;
                 }
 
-                bool waypointsAdded =
-                    RumorWaypointService.TryAddWaypoints(
-                        api,
-                        player,
+                preparedDelivery =
+                    new RumorPreparedDelivery(
                         record,
                         knowledge,
-                        resolution,
-                        api.World.Rand,
-                        out IReadOnlyList<Vec3d> waypointPositions,
-                        out string waypointError
+                        resolution
                     );
 
-                if (!waypointsAdded)
-                {
-                    error = waypointError;
-                    return false;
-                }
-
-                bool committed =
-                    rumorRegistry.TryMarkSold(
-                        record.Id,
-                        knowledge
-                    );
-
-                if (!committed)
-                {
-                    logger.Error(
-                        $"Os waypoints do rumor {record.Id} " +
-                        "foram criados, mas o registro não pôde " +
-                        "ser marcado como vendido."
-                    );
-
-                    error =
-                        "As localizações foram adicionadas ao mapa, " +
-                        "mas o rumor não pôde ser registrado " +
-                        "como vendido.";
-
-                    return false;
-                }
-
-                LogDelivery(
-                    record,
-                    knowledge,
-                    resolution,
-                    waypointPositions
-                );
-
-                deliveredRecord = record;
                 return true;
             }
 
@@ -154,6 +158,100 @@ namespace RumorNetwork.Rumors
 
             logger.Notification(error);
             return false;
+        }
+
+        public bool TryDeliverPrepared(
+            IServerPlayer player,
+            RumorPreparedDelivery preparedDelivery,
+            out IReadOnlyList<RumorWaypointHandle>
+                waypointHandles,
+            out string error
+        )
+        {
+            waypointHandles =
+                new List<RumorWaypointHandle>()
+                    .AsReadOnly();
+
+            error = string.Empty;
+
+            RumorRecord record =
+                preparedDelivery.Record;
+
+            if (
+                record.Knowledge
+                != RumorKnowledgeLevel.NotSold
+            )
+            {
+                error =
+                    "O rumor preparado já foi vendido.";
+
+                return false;
+            }
+
+            bool waypointsAdded =
+                RumorWaypointService
+                    .TryAddWaypointsTracked(
+                        api,
+                        player,
+                        record,
+                        preparedDelivery.Knowledge,
+                        preparedDelivery.Resolution,
+                        api.World.Rand,
+                        out waypointHandles,
+                        out string waypointError
+                    );
+
+            if (!waypointsAdded)
+            {
+                error = waypointError;
+                return false;
+            }
+
+            bool committed =
+                rumorRegistry.TryMarkSold(
+                    record.Id,
+                    preparedDelivery.Knowledge
+                );
+
+            if (!committed)
+            {
+                bool cleaned =
+                    RumorWaypointService
+                        .TryRemoveWaypoints(
+                            api,
+                            player,
+                            waypointHandles.Select(
+                                handle =>
+                                    handle.Guid
+                            ),
+                            out _,
+                            out string cleanupError
+                        );
+
+                logger.Error(
+                    $"Os waypoints do rumor {record.Id} " +
+                    "foram criados, mas o registro não pôde " +
+                    "ser marcado como vendido."
+                );
+
+                error = cleaned
+                    ? "O rumor não pôde ser registrado. " +
+                        "Os waypoints foram removidos."
+                    : "O rumor não pôde ser registrado e " +
+                        "os waypoints não puderam ser " +
+                        $"removidos: {cleanupError}";
+
+                return false;
+            }
+
+            LogDelivery(
+                record,
+                preparedDelivery.Knowledge,
+                preparedDelivery.Resolution,
+                waypointHandles
+            );
+
+            return true;
         }
 
         private static void IncrementFailure(
@@ -238,7 +336,8 @@ namespace RumorNetwork.Rumors
             RumorRecord record,
             RumorKnowledgeLevel knowledge,
             RumorTargetResolution resolution,
-            IReadOnlyList<Vec3d> waypointPositions
+            IReadOnlyList<RumorWaypointHandle>
+                waypointHandles
         )
         {
             Cuboidi box =
@@ -260,7 +359,7 @@ namespace RumorNetwork.Rumors
                 $"Kind={record.Kind} | " +
                 $"Family={record.Family} | " +
                 $"Parts={record.PartCount} | " +
-                $"Waypoints={waypointPositions.Count}"
+                $"Waypoints={waypointHandles.Count}"
             );
 
             logger.Notification(
@@ -292,18 +391,19 @@ namespace RumorNetwork.Rumors
 
             for (
                 int index = 0;
-                index < waypointPositions.Count;
+                index < waypointHandles.Count;
                 index++
             )
             {
-                Vec3d waypointPosition =
-                    waypointPositions[index];
+                RumorWaypointHandle handle =
+                    waypointHandles[index];
 
                 logger.Notification(
                     $"Waypoint[{index}]=(" +
-                    $"{waypointPosition.X:0.0}; " +
-                    $"{waypointPosition.Y:0.0}; " +
-                    $"{waypointPosition.Z:0.0})"
+                    $"{handle.Position.X:0.0}; " +
+                    $"{handle.Position.Y:0.0}; " +
+                    $"{handle.Position.Z:0.0}) | " +
+                    $"Guid={handle.Guid}"
                 );
             }
         }
