@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using RumorNetwork.Structures;
 
 namespace RumorNetwork.Rumors;
 
@@ -60,6 +61,23 @@ public sealed class RumorRegistry
         foreach (RumorRecord record in records.Values)
         {
             if (record.Knowledge == knowledge)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    public int CountByKind(
+        StructureKind kind
+    )
+    {
+        int count = 0;
+
+        foreach (RumorRecord record in records.Values)
+        {
+            if (record.Kind == kind)
             {
                 count++;
             }
