@@ -1,6 +1,8 @@
 using RumorNetwork.Caves;
+using RumorNetwork.Offers;
 using RumorNetwork.Purchases;
 using RumorNetwork.Rumors;
+using RumorNetwork.Traders;
 using Vintagestory.API.Common;
 using Vintagestory.API.Server;
 
@@ -15,6 +17,9 @@ namespace RumorNetwork.Commands
             RumorTargetResolver rumorTargetResolver,
             RumorDeliveryService rumorDeliveryService,
             RumorPurchaseService rumorPurchaseService,
+            RumorOfferService rumorOfferService,
+            TraderLocationPurchaseService
+                traderLocationPurchaseService,
             CaveCellClassifier caveCellClassifier,
             CaveBoundaryScanner caveBoundaryScanner,
             CaveSkyConnectionSearch caveSkyConnectionSearch,
@@ -82,6 +87,11 @@ namespace RumorNetwork.Commands
                 api,
                 rumorDeliveryService,
                 rumorPurchaseService
+            ).Register(rumorCommand);
+
+            new RumorOfferCommands(
+                rumorOfferService,
+                traderLocationPurchaseService
             ).Register(rumorCommand);
         }
     }
