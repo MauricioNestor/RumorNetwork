@@ -17,13 +17,26 @@ namespace RumorNetwork.Traders
 
         public double TargetDistance { get; }
 
+        public int SellerPurchasesUsed { get; }
+
+        public int SellerPurchaseLimit { get; }
+
+        public int SellerPurchasesRemaining =>
+            System.Math.Max(
+                0,
+                SellerPurchaseLimit -
+                SellerPurchasesUsed
+            );
+
         public TraderLocationPurchaseResult(
             RumorRecord seller,
             RumorRecord target,
             RumorPrice price,
             RumorWaypointHandle waypoint,
             double sellerDistance,
-            double targetDistance
+            double targetDistance,
+            int sellerPurchasesUsed,
+            int sellerPurchaseLimit
         )
         {
             Seller = seller;
@@ -32,6 +45,8 @@ namespace RumorNetwork.Traders
             Waypoint = waypoint;
             SellerDistance = sellerDistance;
             TargetDistance = targetDistance;
+            SellerPurchasesUsed = sellerPurchasesUsed;
+            SellerPurchaseLimit = sellerPurchaseLimit;
         }
     }
 }
