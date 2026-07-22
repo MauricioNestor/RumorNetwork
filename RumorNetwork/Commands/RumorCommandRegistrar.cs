@@ -1,3 +1,4 @@
+using RumorNetwork.Caves;
 using RumorNetwork.Rumors;
 using Vintagestory.API.Common;
 using Vintagestory.API.Server;
@@ -12,6 +13,7 @@ namespace RumorNetwork.Commands
             RumorRegistry rumorRegistry,
             RumorTargetResolver rumorTargetResolver,
             RumorDeliveryService rumorDeliveryService,
+            CaveCellClassifier caveCellClassifier,
             int regionSearchRadius
         )
         {
@@ -31,6 +33,12 @@ namespace RumorNetwork.Commands
                 logger,
                 rumorTargetResolver,
                 regionSearchRadius
+            ).Register(rumorCommand);
+
+            new CaveDebugCommands(
+                logger,
+                api.World.BlockAccessor,
+                caveCellClassifier
             ).Register(rumorCommand);
 
             new RumorRegistryCommands(
