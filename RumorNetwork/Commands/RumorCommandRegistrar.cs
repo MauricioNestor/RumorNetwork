@@ -29,10 +29,19 @@ namespace RumorNetwork.Commands
                     )
                 );
 
-            new StructureDebugCommands(
+            StructureInspectionState inspectionState = new();
+            StructureDebugOverlay debugOverlay = new(api);
+
+            new StructureInspectionCommands(
                 api,
                 logger,
                 rumorTargetResolver,
+                inspectionState
+            ).Register(rumorCommand);
+
+            new StructureRegionDebugCommands(
+                api,
+                logger,
                 regionSearchRadius
             ).Register(rumorCommand);
 
@@ -41,7 +50,9 @@ namespace RumorNetwork.Commands
                 logger,
                 api.World.BlockAccessor,
                 caveCellClassifier,
-                caveBoundaryScanner
+                caveBoundaryScanner,
+                inspectionState,
+                debugOverlay
             ).Register(rumorCommand);
 
             new RumorRegistryCommands(
