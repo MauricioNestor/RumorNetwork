@@ -40,6 +40,42 @@ namespace RumorNetwork.Purchases
             );
         }
 
+        public bool TryResolveGeneralPreview(
+            RumorKnowledgeLevel knowledge,
+            out RumorPrice? price,
+            out string error
+        )
+        {
+            RumorPriceConfig selectedConfig =
+                FindKnowledgePrice(
+                    knowledge.ToString()
+                ) ?? config.Pricing.Fallback;
+
+            return TryResolveConfig(
+                selectedConfig,
+                out price,
+                out error
+            );
+        }
+
+        public bool HasStructureSpecificPrice(
+            RumorKnowledgeLevel knowledge
+        )
+        {
+            foreach (
+                RumorStructurePriceConfig rule
+                in config.Pricing.Structures.Values
+            )
+            {
+                if (rule?.Get(knowledge) != null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public bool TryResolveTraderLocation(
             out RumorPrice? price,
             out string error
