@@ -34,11 +34,13 @@ namespace RumorNetwork.Traders
         public bool Clear(
             string playerUid,
             out int revealedCount,
-            out int visitedCount
+            out int visitedCount,
+            out int purchaseCount
         )
         {
             revealedCount = 0;
             visitedCount = 0;
+            purchaseCount = 0;
 
             if (!knowledgeByPlayer.TryGetValue(
                     playerUid,
@@ -50,6 +52,8 @@ namespace RumorNetwork.Traders
 
             revealedCount = knowledge.RevealedCount;
             visitedCount = knowledge.VisitedCount;
+            purchaseCount =
+                knowledge.TotalTraderLocationPurchases;
 
             knowledgeByPlayer.Remove(playerUid);
             return true;
