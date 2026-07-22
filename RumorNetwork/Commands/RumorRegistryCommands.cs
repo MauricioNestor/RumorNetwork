@@ -2,6 +2,7 @@ using RumorNetwork.Rumors;
 using RumorNetwork.Structures;
 using System.Collections.Generic;
 using Vintagestory.API.Common;
+using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 
 namespace RumorNetwork.Commands
