@@ -13,6 +13,9 @@ namespace RumorNetwork.Configuration
         public TraderLocationRumorConfig TraderLocations =
             TraderLocationRumorConfig.CreateDefault();
 
+        public RemoteStructureCatalogConfig RemoteCatalog =
+            RemoteStructureCatalogConfig.CreateDefault();
+
         public void Normalize()
         {
             Pricing ??=
@@ -20,6 +23,9 @@ namespace RumorNetwork.Configuration
 
             TraderLocations ??=
                 TraderLocationRumorConfig.CreateDefault();
+
+            RemoteCatalog ??=
+                RemoteStructureCatalogConfig.CreateDefault();
 
             if (Version < 2)
             {
@@ -35,8 +41,9 @@ namespace RumorNetwork.Configuration
 
             Pricing.Normalize();
             TraderLocations.Normalize();
+            RemoteCatalog.Normalize();
 
-            Version = 2;
+            Version = 3;
         }
     }
 
@@ -155,6 +162,41 @@ namespace RumorNetwork.Configuration
                 );
 
             ExactPrice.Normalize();
+        }
+    }
+
+    public sealed class RemoteStructureCatalogConfig
+    {
+        public bool Enabled = true;
+
+        public bool ScanOnPlayerReady = true;
+
+        public int BackfillRadiusRegions = 24;
+
+        public int ConcurrentRegionChecks = 4;
+
+        public static RemoteStructureCatalogConfig
+            CreateDefault()
+        {
+            return new RemoteStructureCatalogConfig();
+        }
+
+        public void Normalize()
+        {
+            if (BackfillRadiusRegions <= 0)
+            {
+                BackfillRadiusRegions = 24;
+            }
+
+            if (ConcurrentRegionChecks <= 0)
+            {
+                ConcurrentRegionChecks = 4;
+            }
+
+            if (ConcurrentRegionChecks > 16)
+            {
+                ConcurrentRegionChecks = 16;
+            }
         }
     }
 
