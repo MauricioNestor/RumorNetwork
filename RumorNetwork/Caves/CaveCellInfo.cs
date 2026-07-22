@@ -8,7 +8,8 @@ namespace RumorNetwork.Caves
 
         public bool IsTraversable =>
             Traversal == CaveTraversalKind.Open ||
-            Traversal == CaveTraversalKind.Openable;
+            Traversal == CaveTraversalKind.Openable ||
+            Traversal == CaveTraversalKind.Partial;
 
         public CaveCellInfo(
             CaveTraversalKind traversal,
