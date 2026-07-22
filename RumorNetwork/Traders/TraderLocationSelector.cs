@@ -15,6 +15,36 @@ namespace RumorNetwork.Traders
             this.rumorRegistry = rumorRegistry;
         }
 
+        public int CountIndexedTraders()
+        {
+            return rumorRegistry.CountByKind(
+                StructureKind.Trader
+            );
+        }
+
+        public int CountKnownIndexedTraders(
+            PlayerTraderKnowledge knowledge
+        )
+        {
+            int count = 0;
+
+            foreach (
+                RumorRecord candidate
+                in rumorRegistry.Records
+            )
+            {
+                if (
+                    candidate.Kind == StructureKind.Trader &&
+                    knowledge.IsKnown(candidate.Id)
+                )
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
         public bool TryFindSeller(
             Vec3d playerPosition,
             double maximumDistance,
