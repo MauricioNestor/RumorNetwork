@@ -125,6 +125,13 @@ namespace RumorNetwork.Commands
             }
 
             BlockPos start = args.Caller.Entity.Pos.AsBlockPos;
+            int rainHeight =
+                api.World.BlockAccessor.GetRainMapHeightAt(
+                    start.X,
+                    start.Z
+                );
+            bool startSkyExposed = start.Y > rainHeight;
+
             CaveSkyConnectionResult result =
                 skyConnectionSearch.SearchFrom(start);
 
@@ -134,6 +141,11 @@ namespace RumorNetwork.Commands
 
             logger.Notification(
                 $"Start=({start.X},{start.Y},{start.Z}) | " +
+                $"RainHeight={rainHeight} | " +
+                $"StartSkyExposed={startSkyExposed}"
+            );
+
+            logger.Notification(
                 $"Status={result.Status} | " +
                 $"Visited={result.VisitedCellCount} | " +
                 $"Unavailable={result.UnavailableNeighborCount} | " +
