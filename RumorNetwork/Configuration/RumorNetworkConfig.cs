@@ -105,6 +105,8 @@ namespace RumorNetwork.Configuration
     {
         public bool Enabled = true;
 
+        public double SellerMatchRadius = 48;
+
         public RumorPriceConfig ExactPrice =
             RumorPriceConfig.Single(
                 "game:gear-rusty",
@@ -119,6 +121,11 @@ namespace RumorNetwork.Configuration
 
         public void Normalize()
         {
+            if (SellerMatchRadius <= 0)
+            {
+                SellerMatchRadius = 48;
+            }
+
             ExactPrice ??=
                 RumorPriceConfig.Single(
                     "game:gear-rusty",
