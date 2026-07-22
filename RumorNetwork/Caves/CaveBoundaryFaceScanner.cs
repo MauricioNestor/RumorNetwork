@@ -70,7 +70,6 @@ namespace RumorNetwork.Caves
                         );
 
                     accumulator.AddClassifiedPair(
-                        face,
                         new CaveBoundaryOpening(
                             face,
                             insidePosition,
