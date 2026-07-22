@@ -91,6 +91,28 @@ namespace RumorNetwork.Traders
 
             knowledge.MarkVisited(seller.Id);
 
+            int sellerPurchaseLimit =
+                config.TraderLocations
+                    .MaxLocationsSoldPerTrader;
+
+            int sellerPurchasesUsed =
+                knowledge.GetPurchasesFromSeller(
+                    seller.Id
+                );
+
+            if (!knowledge.CanPurchaseFromSeller(
+                    seller.Id,
+                    sellerPurchaseLimit
+                ))
+            {
+                error =
+                    "Este comerciante já vendeu todas as " +
+                    $"{sellerPurchaseLimit} localizações que " +
+                    "conhecia para você.";
+
+                return false;
+            }
+
             bool targetFound =
                 selector.TryFindNearestUnknown(
                     seller,
@@ -211,6 +233,11 @@ namespace RumorNetwork.Traders
                 );
             }
 
+            sellerPurchasesUsed =
+                knowledge.RecordPurchaseFromSeller(
+                    seller.Id
+                );
+
             RumorWaypointHandle waypoint =
                 waypointHandles[0];
 
@@ -220,7 +247,9 @@ namespace RumorNetwork.Traders
                 price,
                 waypoint,
                 sellerDistance,
-                targetDistance
+                targetDistance,
+                sellerPurchasesUsed,
+                sellerPurchaseLimit
             );
 
             logger.Notification(
@@ -233,6 +262,8 @@ namespace RumorNetwork.Traders
                 $"Target={target.Id} | " +
                 $"Distance={targetDistance:0.0} | " +
                 $"Price={price.Description} | " +
+                $"SellerQuota={sellerPurchasesUsed}/" +
+                $"{sellerPurchaseLimit} | " +
                 $"Waypoint={waypoint.Guid}"
             );
 
