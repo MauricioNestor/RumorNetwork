@@ -1,5 +1,7 @@
 using RumorNetwork.Caves;
 using RumorNetwork.Commands;
+using RumorNetwork.Configuration;
+using RumorNetwork.Purchases;
 using RumorNetwork.Rumors;
 using Vintagestory.API.Common;
 using Vintagestory.API.Server;
@@ -17,6 +19,7 @@ namespace RumorNetwork
         private ICoreServerAPI serverApi = null!;
         private RumorTargetResolver rumorTargetResolver = null!;
         private RumorDeliveryService rumorDeliveryService = null!;
+        private RumorPurchaseService rumorPurchaseService = null!;
         private CaveCellClassifier caveCellClassifier = null!;
         private CaveBoundaryScanner caveBoundaryScanner = null!;
         private CaveSkyConnectionSearch caveSkyConnectionSearch = null!;
@@ -28,6 +31,12 @@ namespace RumorNetwork
         )
         {
             serverApi = api;
+
+            RumorNetworkConfig config =
+                RumorConfigLoader.Load(
+                    api,
+                    Mod.Logger
+                );
 
             caveCellClassifier =
                 new CaveCellClassifier(
@@ -60,6 +69,26 @@ namespace RumorNetwork
                     rumorTargetResolver
                 );
 
+            RumorPriceResolver priceResolver =
+                new(
+                    api.World,
+                    config
+                );
+
+            RumorInventoryPaymentService
+                paymentService =
+                    new(
+                        api,
+                        Mod.Logger
+                    );
+
+            rumorPurchaseService =
+                new RumorPurchaseService(
+                    rumorDeliveryService,
+                    priceResolver,
+                    paymentService
+                );
+
             api.Event.SaveGameLoaded +=
                 OnSaveGameLoaded;
 
@@ -72,6 +101,7 @@ namespace RumorNetwork
                 rumorRegistry,
                 rumorTargetResolver,
                 rumorDeliveryService,
+                rumorPurchaseService,
                 caveCellClassifier,
                 caveBoundaryScanner,
                 caveSkyConnectionSearch,
