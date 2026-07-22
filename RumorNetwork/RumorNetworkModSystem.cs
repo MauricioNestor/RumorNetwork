@@ -20,6 +20,7 @@ namespace RumorNetwork
         private ICoreServerAPI serverApi = null!;
         private RumorDeliveryService rumorDeliveryService = null!;
         private CaveCellClassifier caveCellClassifier = null!;
+        private CaveBoundaryScanner caveBoundaryScanner = null!;
 
         private int RegionSearchRadius { get; set; } = 1;
 
@@ -42,6 +43,12 @@ namespace RumorNetwork
                     api.World.BlockAccessor
                 );
 
+            caveBoundaryScanner =
+                new CaveBoundaryScanner(
+                    api.World.BlockAccessor,
+                    caveCellClassifier
+                );
+
             api.Event.SaveGameLoaded +=
                 OnSaveGameLoaded;
 
@@ -55,6 +62,7 @@ namespace RumorNetwork
                 rumorTargetResolver,
                 rumorDeliveryService,
                 caveCellClassifier,
+                caveBoundaryScanner,
                 RegionSearchRadius
             );
 
