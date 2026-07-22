@@ -1,6 +1,5 @@
 using RumorNetwork.Rumors;
 using Vintagestory.API.Common;
-using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 
 namespace RumorNetwork.Commands
@@ -8,21 +7,15 @@ namespace RumorNetwork.Commands
     public sealed class RumorDeliveryCommands
     {
         private readonly ICoreServerAPI api;
-        private readonly ILogger logger;
-        private readonly RumorRegistry rumorRegistry;
-        private readonly RumorTargetResolver rumorTargetResolver;
+        private readonly RumorDeliveryService rumorDeliveryService;
 
         public RumorDeliveryCommands(
             ICoreServerAPI api,
-            ILogger logger,
-            RumorRegistry rumorRegistry,
-            RumorTargetResolver rumorTargetResolver
+            RumorDeliveryService rumorDeliveryService
         )
         {
             this.api = api;
-            this.logger = logger;
-            this.rumorRegistry = rumorRegistry;
-            this.rumorTargetResolver = rumorTargetResolver;
+            this.rumorDeliveryService = rumorDeliveryService;
         }
 
         public void Register(
@@ -72,121 +65,20 @@ namespace RumorNetwork.Commands
                 );
             }
 
-            bool selected =
-                rumorRegistry.TryPickRandomNotSold(
-                    api.World.Rand,
-                    out RumorRecord? record
-                );
-
-            if (!selected || record == null)
-            {
-                return TextCommandResult.Error(
-                    "Não existem rumores " +
-                    "ainda não vendidos."
-                );
-            }
-
-            bool targetResolved =
-                rumorTargetResolver.TryResolve(
-                    record,
-                    out RumorTarget? target,
-                    out string targetError
-                );
-
-            if (
-                !targetResolved ||
-                target == null
-            )
-            {
-                return TextCommandResult.Error(
-                    targetError
-                );
-            }
-
-            bool waypointAdded =
-                RumorWaypointService.TryAddWaypoint(
-                    api,
+            bool delivered =
+                rumorDeliveryService.TryDeliver(
                     player,
-                    record,
                     knowledge,
-                    target,
-                    api.World.Rand,
-                    out Vec3d waypointPosition,
-                    out string waypointError
+                    out RumorRecord? record,
+                    out string deliveryError
                 );
 
-            if (!waypointAdded)
+            if (!delivered || record == null)
             {
                 return TextCommandResult.Error(
-                    waypointError
+                    deliveryError
                 );
             }
-
-            bool committed =
-                rumorRegistry.TryMarkSold(
-                    record.Id,
-                    knowledge
-                );
-
-            if (!committed)
-            {
-                logger.Error(
-                    $"O waypoint do rumor {record.Id} " +
-                    "foi criado, mas o registro não pôde " +
-                    "ser marcado como vendido."
-                );
-
-                return TextCommandResult.Error(
-                    "A localização foi adicionada ao mapa, " +
-                    "mas o rumor não pôde ser registrado " +
-                    "como vendido."
-                );
-            }
-
-            Cuboidi box =
-                record.CreateLocation();
-
-            Vec3i center =
-                box.Center;
-
-            logger.Notification(
-                "=== Rumor Network: rumor sorteado ==="
-            );
-
-            logger.Notification(
-                $"Id={record.Id}"
-            );
-
-            logger.Notification(
-                $"Knowledge={knowledge} | " +
-                $"Kind={record.Kind} | " +
-                $"Family={record.Family} | " +
-                $"Parts={record.PartCount}"
-            );
-
-            logger.Notification(
-                $"TrueCenter=(" +
-                $"{center.X}; " +
-                $"{center.Y}; " +
-                $"{center.Z}) | " +
-                $"Box=({box.X1},{box.Y1},{box.Z1})-" +
-                $"({box.X2},{box.Y2},{box.Z2})"
-            );
-
-            logger.Notification(
-                $"ResolvedTarget=(" +
-                $"{target.Position.X:0.0}; " +
-                $"{target.Position.Y:0.0}; " +
-                $"{target.Position.Z:0.0}) | " +
-                $"TargetKind={target.Kind}"
-            );
-
-            logger.Notification(
-                $"Waypoint=(" +
-                $"{waypointPosition.X:0.0}; " +
-                $"{waypointPosition.Y:0.0}; " +
-                $"{waypointPosition.Z:0.0})"
-            );
 
             string precisionText =
                 knowledge
