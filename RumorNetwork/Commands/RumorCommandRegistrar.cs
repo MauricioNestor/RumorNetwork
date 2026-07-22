@@ -20,6 +20,7 @@ namespace RumorNetwork.Commands
             RumorOfferService rumorOfferService,
             TraderLocationPurchaseService
                 traderLocationPurchaseService,
+            TraderKnowledgeRegistry traderKnowledgeRegistry,
             CaveCellClassifier caveCellClassifier,
             CaveBoundaryScanner caveBoundaryScanner,
             CaveSkyConnectionSearch caveSkyConnectionSearch,
@@ -91,7 +92,8 @@ namespace RumorNetwork.Commands
 
             new RumorOfferCommands(
                 rumorOfferService,
-                traderLocationPurchaseService
+                traderLocationPurchaseService,
+                traderKnowledgeRegistry
             ).Register(rumorCommand);
         }
     }
