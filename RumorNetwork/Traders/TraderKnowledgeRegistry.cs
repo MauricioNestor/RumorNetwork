@@ -31,6 +31,30 @@ namespace RumorNetwork.Traders
             return knowledge;
         }
 
+        public bool Clear(
+            string playerUid,
+            out int revealedCount,
+            out int visitedCount
+        )
+        {
+            revealedCount = 0;
+            visitedCount = 0;
+
+            if (!knowledgeByPlayer.TryGetValue(
+                    playerUid,
+                    out PlayerTraderKnowledge? knowledge
+                ))
+            {
+                return false;
+            }
+
+            revealedCount = knowledge.RevealedCount;
+            visitedCount = knowledge.VisitedCount;
+
+            knowledgeByPlayer.Remove(playerUid);
+            return true;
+        }
+
         public TraderKnowledgeSaveData Export()
         {
             TraderKnowledgeSaveData saveData = new();
