@@ -56,8 +56,47 @@ namespace RumorNetwork.Rumors
             out string error
         )
         {
-            List<Vec3d> addedPositions = new();
-            waypointPositions = addedPositions.AsReadOnly();
+            bool added = TryAddWaypointsTracked(
+                api,
+                player,
+                record,
+                knowledge,
+                resolution,
+                random,
+                out IReadOnlyList<RumorWaypointHandle>
+                    waypointHandles,
+                out error
+            );
+
+            waypointPositions = waypointHandles
+                .Select(
+                    handle =>
+                        handle.Position
+                )
+                .ToList()
+                .AsReadOnly();
+
+            return added;
+        }
+
+        public static bool TryAddWaypointsTracked(
+            ICoreServerAPI api,
+            IServerPlayer player,
+            RumorRecord record,
+            RumorKnowledgeLevel knowledge,
+            RumorTargetResolution resolution,
+            Random random,
+            out IReadOnlyList<RumorWaypointHandle>
+                waypointHandles,
+            out string error
+        )
+        {
+            List<RumorWaypointHandle> addedHandles =
+                new();
+
+            waypointHandles =
+                addedHandles.AsReadOnly();
+
             error = string.Empty;
 
             if (!TryGetWaypointLayer(
@@ -75,49 +114,136 @@ namespace RumorNetwork.Rumors
                     knowledge
                 );
 
-            foreach (RumorTarget target in targets)
+            try
             {
-                Vec3d waypointPosition =
-                    CreateWaypointPosition(
-                        target.Position,
-                        knowledge,
-                        random
+                foreach (RumorTarget target in targets)
+                {
+                    Vec3d waypointPosition =
+                        CreateWaypointPosition(
+                            target.Position,
+                            knowledge,
+                            random
+                        );
+
+                    string waypointGuid =
+                        WaypointGuidPrefix +
+                        Guid.NewGuid().ToString("N");
+
+                    Waypoint waypoint = new()
+                    {
+                        Color =
+                            ColorUtil.Hex2Int(
+                                WaypointColor
+                            ),
+
+                        Icon =
+                            CreateIcon(target.Kind),
+
+                        Pinned = true,
+
+                        Position =
+                            waypointPosition,
+
+                        OwningPlayerUid =
+                            player.PlayerUID,
+
+                        Title = CreateTitle(
+                            record,
+                            knowledge,
+                            target.Kind
+                        ),
+
+                        Guid = waypointGuid
+                    };
+
+                    waypointLayer.AddWaypoint(
+                        waypoint,
+                        player
                     );
 
-                Waypoint waypoint = new()
+                    addedHandles.Add(
+                        new RumorWaypointHandle(
+                            waypointGuid,
+                            waypointPosition
+                        )
+                    );
+                }
+            }
+            catch (Exception exception)
+            {
+                if (addedHandles.Count > 0)
                 {
-                    Color =
-                        ColorUtil.Hex2Int(WaypointColor),
+                    TryRemoveWaypoints(
+                        api,
+                        player,
+                        addedHandles.Select(
+                            handle =>
+                                handle.Guid
+                        ),
+                        out _,
+                        out _
+                    );
+                }
 
-                    Icon = CreateIcon(target.Kind),
-                    Pinned = true,
-                    Position = waypointPosition,
-                    OwningPlayerUid =
-                        player.PlayerUID,
+                error =
+                    "Não foi possível adicionar os " +
+                    "waypoints do rumor: " +
+                    exception
+                        .GetBaseException()
+                        .Message;
 
-                    Title = CreateTitle(
-                        record,
-                        knowledge,
-                        target.Kind
-                    ),
-
-                    Guid =
-                        WaypointGuidPrefix +
-                        Guid.NewGuid().ToString("N")
-                };
-
-                waypointLayer.AddWaypoint(
-                    waypoint,
-                    player
-                );
-
-                addedPositions.Add(
-                    waypointPosition
-                );
+                return false;
             }
 
-            waypointPositions = addedPositions.AsReadOnly();
+            waypointHandles =
+                addedHandles.AsReadOnly();
+
             return true;
+        }
+
+        public static bool TryRemoveWaypoints(
+            ICoreServerAPI api,
+            IServerPlayer player,
+            IEnumerable<string> waypointGuids,
+            out int removedCount,
+            out string error
+        )
+        {
+            removedCount = 0;
+            error = string.Empty;
+
+            if (!TryGetWaypointLayer(
+                    api,
+                    out WaypointMapLayer? waypointLayer,
+                    out error
+                ) || waypointLayer == null)
+            {
+                return false;
+            }
+
+            HashSet<string> requestedGuids =
+                new(
+                    waypointGuids,
+                    StringComparer.Ordinal
+                );
+
+            removedCount =
+                waypointLayer.Waypoints.RemoveAll(
+                    waypoint =>
+                        waypoint.OwningPlayerUid
+                            == player.PlayerUID &&
+                        waypoint.Guid != null &&
+                        requestedGuids.Contains(
+                            waypoint.Guid
+                        )
+                );
+
+            return TrySynchronizeWaypointLayer(
+                waypointLayer,
+                player,
+                removedCount,
+                out error
+            );
         }
 
         public static bool TryClearWaypoints(
@@ -139,28 +265,44 @@ namespace RumorNetwork.Rumors
                 return false;
             }
 
+            removedCount =
+                waypointLayer.Waypoints.RemoveAll(
+                    waypoint =>
+                        waypoint.OwningPlayerUid
+                            == player.PlayerUID &&
+                        IsRumorWaypoint(waypoint)
+                );
+
+            return TrySynchronizeWaypointLayer(
+                waypointLayer,
+                player,
+                removedCount,
+                out error
+            );
+        }
+
+        private static bool TrySynchronizeWaypointLayer(
+            WaypointMapLayer waypointLayer,
+            IServerPlayer player,
+            int changedCount,
+            out string error
+        )
+        {
+            error = string.Empty;
+
+            if (changedCount == 0)
+            {
+                return true;
+            }
+
             if (ResendWaypointsMethod == null)
             {
                 error =
-                    "A versão atual do jogo não expõe a rotina " +
-                    "necessária para sincronizar a remoção dos waypoints.";
+                    "A versão atual do jogo não expõe a " +
+                    "rotina necessária para sincronizar " +
+                    "a remoção dos waypoints.";
 
                 return false;
-            }
-
-            List<Waypoint> waypoints =
-                waypointLayer.Waypoints;
-
-            removedCount = waypoints.RemoveAll(
-                waypoint =>
-                    waypoint.OwningPlayerUid
-                        == player.PlayerUID &&
-                    IsRumorWaypoint(waypoint)
-            );
-
-            if (removedCount == 0)
-            {
-                return true;
             }
 
             try
@@ -183,9 +325,11 @@ namespace RumorNetwork.Rumors
             catch (Exception exception)
             {
                 error =
-                    "Os waypoints foram removidos no servidor, " +
-                    "mas a camada do mapa não pôde ser atualizada: " +
-                    $"{exception.GetBaseException().Message}";
+                    "A camada do mapa não pôde ser " +
+                    "atualizada: " +
+                    exception
+                        .GetBaseException()
+                        .Message;
 
                 return false;
             }
@@ -344,7 +488,8 @@ namespace RumorNetwork.Rumors
                 RumorTargetKind.StructureEntrance =>
                     "ruínas subterrâneas",
 
-                _ => CreateLocationName(record)
+                _ =>
+                    CreateLocationName(record)
             };
 
             string precision =
@@ -354,7 +499,8 @@ namespace RumorNetwork.Rumors
                     : "local exato";
 
             return
-                $"{WaypointTitlePrefix} {locationName} — " +
+                $"{WaypointTitlePrefix} " +
+                $"{locationName} — " +
                 precision;
         }
 
