@@ -41,7 +41,7 @@ public static class RumorSiteBuilder
         const StructureKind kind =
             StructureKind.RuinedVillage;
 
-        if (!RumorEligibilityPolicy.IsEligible(kind))
+        if (!RumorEligibilityPolicy.IsIndexable(kind))
         {
             return;
         }
@@ -90,7 +90,7 @@ public static class RumorSiteBuilder
             StructureKind kind =
                 StructureClassifier.Classify(structure);
 
-            if (!RumorEligibilityPolicy.IsEligible(kind))
+            if (!RumorEligibilityPolicy.IsIndexable(kind))
             {
                 continue;
             }
