@@ -14,6 +14,7 @@ namespace RumorNetwork.Commands
             RumorTargetResolver rumorTargetResolver,
             RumorDeliveryService rumorDeliveryService,
             CaveCellClassifier caveCellClassifier,
+            CaveBoundaryScanner caveBoundaryScanner,
             int regionSearchRadius
         )
         {
@@ -36,9 +37,11 @@ namespace RumorNetwork.Commands
             ).Register(rumorCommand);
 
             new CaveDebugCommands(
+                api,
                 logger,
                 api.World.BlockAccessor,
-                caveCellClassifier
+                caveCellClassifier,
+                caveBoundaryScanner
             ).Register(rumorCommand);
 
             new RumorRegistryCommands(
