@@ -19,7 +19,6 @@ namespace RumorNetwork.Caves
         }
 
         public void AddClassifiedPair(
-            CaveBoundaryFace face,
             CaveBoundaryOpening opening
         )
         {
