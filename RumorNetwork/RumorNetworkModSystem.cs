@@ -1,3 +1,4 @@
+using RumorNetwork.Catalog;
 using RumorNetwork.Caves;
 using RumorNetwork.Commands;
 using RumorNetwork.Configuration;
@@ -18,6 +19,9 @@ namespace RumorNetwork
         private const string TraderKnowledgeSaveKey =
             "rumornetwork:trader-knowledge-v1";
 
+        private const string RemoteCatalogSaveKey =
+            "rumornetwork:remote-catalog-v1";
+
         private readonly RumorRegistry rumorRegistry =
             new();
 
@@ -31,6 +35,8 @@ namespace RumorNetwork
         private RumorOfferService rumorOfferService = null!;
         private TraderLocationPurchaseService
             traderLocationPurchaseService = null!;
+        private SelectiveStructureCatalogService
+            selectiveCatalogService = null!;
         private CaveCellClassifier caveCellClassifier = null!;
         private CaveBoundaryScanner caveBoundaryScanner = null!;
         private CaveSkyConnectionSearch caveSkyConnectionSearch = null!;
@@ -106,6 +112,14 @@ namespace RumorNetwork
                     priceResolver
                 );
 
+            selectiveCatalogService =
+                new SelectiveStructureCatalogService(
+                    api,
+                    Mod.Logger,
+                    rumorRegistry,
+                    config.RemoteCatalog
+                );
+
             TraderLocationSelector traderSelector =
                 new(rumorRegistry);
 
@@ -118,7 +132,8 @@ namespace RumorNetwork
                     priceResolver,
                     paymentService,
                     traderKnowledgeRegistry,
-                    traderSelector
+                    traderSelector,
+                    selectiveCatalogService
                 );
 
             api.Event.SaveGameLoaded +=
@@ -137,6 +152,7 @@ namespace RumorNetwork
                 rumorOfferService,
                 traderLocationPurchaseService,
                 traderKnowledgeRegistry,
+                selectiveCatalogService,
                 caveCellClassifier,
                 caveBoundaryScanner,
                 caveSkyConnectionSearch,
@@ -146,6 +162,12 @@ namespace RumorNetwork
             Mod.Logger.Notification(
                 "Rumor Network carregado no servidor."
             );
+        }
+
+        public override void Dispose()
+        {
+            selectiveCatalogService?.Stop();
+            base.Dispose();
         }
 
         private void OnSaveGameLoaded()
@@ -167,6 +189,19 @@ namespace RumorNetwork
             traderKnowledgeRegistry.Import(
                 traderSaveData
             );
+
+            SelectiveStructureCatalogSaveData
+                catalogSaveData =
+                    serverApi.WorldManager.SaveGame.GetData(
+                        RemoteCatalogSaveKey,
+                        new SelectiveStructureCatalogSaveData()
+                    );
+
+            selectiveCatalogService.Import(
+                catalogSaveData
+            );
+
+            selectiveCatalogService.Start();
 
             Mod.Logger.Notification(
                 $"Rumor Network carregou " +
@@ -190,6 +225,15 @@ namespace RumorNetwork
             serverApi.WorldManager.SaveGame.StoreData(
                 TraderKnowledgeSaveKey,
                 traderSaveData
+            );
+
+            SelectiveStructureCatalogSaveData
+                catalogSaveData =
+                    selectiveCatalogService.Export();
+
+            serverApi.WorldManager.SaveGame.StoreData(
+                RemoteCatalogSaveKey,
+                catalogSaveData
             );
         }
     }
