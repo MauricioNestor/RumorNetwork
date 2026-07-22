@@ -1,4 +1,5 @@
 using RumorNetwork.Caves;
+using RumorNetwork.Purchases;
 using RumorNetwork.Rumors;
 using Vintagestory.API.Common;
 using Vintagestory.API.Server;
@@ -13,6 +14,7 @@ namespace RumorNetwork.Commands
             RumorRegistry rumorRegistry,
             RumorTargetResolver rumorTargetResolver,
             RumorDeliveryService rumorDeliveryService,
+            RumorPurchaseService rumorPurchaseService,
             CaveCellClassifier caveCellClassifier,
             CaveBoundaryScanner caveBoundaryScanner,
             CaveSkyConnectionSearch caveSkyConnectionSearch,
@@ -21,7 +23,9 @@ namespace RumorNetwork.Commands
         {
             IChatCommand rumorCommand = api.ChatCommands
                 .Create("rumor")
-                .WithDescription("Comandos do Rumor Network.")
+                .WithDescription(
+                    "Comandos do Rumor Network."
+                )
                 .RequiresPlayer()
                 .RequiresPrivilege(Privilege.chat)
                 .HandleWith(_ =>
@@ -30,8 +34,11 @@ namespace RumorNetwork.Commands
                     )
                 );
 
-            StructureInspectionState inspectionState = new();
-            StructureDebugOverlay debugOverlay = new(api);
+            StructureInspectionState inspectionState =
+                new();
+
+            StructureDebugOverlay debugOverlay =
+                new(api);
 
             new StructureInspectionCommands(
                 api,
@@ -73,7 +80,8 @@ namespace RumorNetwork.Commands
 
             new RumorDeliveryCommands(
                 api,
-                rumorDeliveryService
+                rumorDeliveryService,
+                rumorPurchaseService
             ).Register(rumorCommand);
         }
     }
