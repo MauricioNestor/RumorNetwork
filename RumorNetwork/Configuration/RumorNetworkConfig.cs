@@ -5,6 +5,8 @@ namespace RumorNetwork.Configuration
 {
     public sealed class RumorNetworkConfig
     {
+        public int Version;
+
         public RumorPricingConfig Pricing =
             RumorPricingConfig.CreateDefault();
 
@@ -16,12 +18,25 @@ namespace RumorNetwork.Configuration
             Pricing ??=
                 RumorPricingConfig.CreateDefault();
 
-            Pricing.Normalize();
-
             TraderLocations ??=
                 TraderLocationRumorConfig.CreateDefault();
 
+            if (Version < 2)
+            {
+                TraderLocations.ExactPrice =
+                    RumorPriceConfig.Single(
+                        "game:gear-rusty",
+                        4
+                    );
+
+                TraderLocations
+                    .MaxLocationsSoldPerTrader = 2;
+            }
+
+            Pricing.Normalize();
             TraderLocations.Normalize();
+
+            Version = 2;
         }
     }
 
@@ -107,10 +122,12 @@ namespace RumorNetwork.Configuration
 
         public double SellerMatchRadius = 48;
 
+        public int MaxLocationsSoldPerTrader = 2;
+
         public RumorPriceConfig ExactPrice =
             RumorPriceConfig.Single(
                 "game:gear-rusty",
-                1
+                4
             );
 
         public static TraderLocationRumorConfig
@@ -126,10 +143,15 @@ namespace RumorNetwork.Configuration
                 SellerMatchRadius = 48;
             }
 
+            if (MaxLocationsSoldPerTrader <= 0)
+            {
+                MaxLocationsSoldPerTrader = 2;
+            }
+
             ExactPrice ??=
                 RumorPriceConfig.Single(
                     "game:gear-rusty",
-                    1
+                    4
                 );
 
             ExactPrice.Normalize();
