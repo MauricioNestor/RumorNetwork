@@ -8,28 +8,24 @@ using Vintagestory.API.Server;
 
 namespace RumorNetwork.Commands
 {
-    public sealed class StructureDebugCommands
+    public sealed class StructureRegionDebugCommands
     {
         private readonly ICoreServerAPI api;
         private readonly ILogger logger;
-        private readonly RumorTargetResolver rumorTargetResolver;
         private readonly int regionSearchRadius;
-        private readonly List<GeneratedStructure> lastInspection = new();
 
         private int MaximumRegionCount =>
             (regionSearchRadius * 2 + 1) *
             (regionSearchRadius * 2 + 1);
 
-        public StructureDebugCommands(
+        public StructureRegionDebugCommands(
             ICoreServerAPI api,
             ILogger logger,
-            RumorTargetResolver rumorTargetResolver,
             int regionSearchRadius
         )
         {
             this.api = api;
             this.logger = logger;
-            this.rumorTargetResolver = rumorTargetResolver;
             this.regionSearchRadius = regionSearchRadius;
         }
 
@@ -45,53 +41,6 @@ namespace RumorNetwork.Commands
                 .RequiresPlayer()
                 .RequiresPrivilege(Privilege.chat)
                 .HandleWith(DumpCurrentRegion)
-                .EndSubCommand();
-
-            rumorCommand
-                .BeginSubCommand("inspect")
-                .WithDescription(
-                    "Lista estruturas da região atual cujo código ou grupo contenha o filtro."
-                )
-                .RequiresPlayer()
-                .RequiresPrivilege(Privilege.chat)
-                .WithArgs(
-                    api.ChatCommands.Parsers.All("filter")
-                )
-                .HandleWith(InspectCurrentRegion)
-                .EndSubCommand();
-
-            rumorCommand
-                .BeginSubCommand("goto")
-                .WithDescription(
-                    "Teleporta para uma estrutura retornada pelo último inspect."
-                )
-                .RequiresPlayer()
-                .RequiresPrivilege(Privilege.tp)
-                .WithArgs(
-                    api.ChatCommands.Parsers.IntRange(
-                        "index",
-                        0,
-                        int.MaxValue
-                    )
-                )
-                .HandleWith(GoToInspectedStructure)
-                .EndSubCommand();
-
-            rumorCommand
-                .BeginSubCommand("resolve")
-                .WithDescription(
-                    "Resolve o alvo de uma estrutura retornada pelo último inspect."
-                )
-                .RequiresPlayer()
-                .RequiresPrivilege(Privilege.chat)
-                .WithArgs(
-                    api.ChatCommands.Parsers.IntRange(
-                        "index",
-                        0,
-                        int.MaxValue
-                    )
-                )
-                .HandleWith(ResolveInspectedStructure)
                 .EndSubCommand();
 
             rumorCommand
@@ -171,211 +120,6 @@ namespace RumorNetwork.Commands
             return TextCommandResult.Success(
                 $"{structures.Count} estruturas encontradas. " +
                 "Veja o Output/console do servidor."
-            );
-        }
-
-        private TextCommandResult InspectCurrentRegion(
-            TextCommandCallingArgs args
-        )
-        {
-            string filter =
-                ((string)args[0]).Trim();
-
-            BlockPos playerPos =
-                args.Caller.Entity.Pos.AsBlockPos;
-
-            IMapRegion? region =
-                GetCurrentRegion(playerPos);
-
-            if (region == null)
-            {
-                return TextCommandResult.Error(
-                    "A região atual não está carregada."
-                );
-            }
-
-            lastInspection.Clear();
-
-            foreach (
-                GeneratedStructure structure
-                in region.GeneratedStructures
-            )
-            {
-                bool codeMatches =
-                    structure.Code?.Contains(
-                        filter,
-                        StringComparison.OrdinalIgnoreCase
-                    ) == true;
-
-                bool groupMatches =
-                    structure.Group?.Contains(
-                        filter,
-                        StringComparison.OrdinalIgnoreCase
-                    ) == true;
-
-                if (codeMatches || groupMatches)
-                {
-                    lastInspection.Add(structure);
-                }
-            }
-
-            logger.Notification(
-                $"=== Rumor inspect: \"{filter}\" ==="
-            );
-
-            for (
-                int index = 0;
-                index < lastInspection.Count;
-                index++
-            )
-            {
-                GeneratedStructure structure =
-                    lastInspection[index];
-
-                Cuboidi box = structure.Location;
-                Vec3i center = box.Center;
-
-                logger.Notification(
-                    $"[{index}] " +
-                    $"Code={structure.Code ?? "(sem código)"} | " +
-                    $"Group={structure.Group ?? "(sem grupo)"} | " +
-                    $"Center={center.X},{center.Y},{center.Z} | " +
-                    $"Box=({box.X1},{box.Y1},{box.Z1})-" +
-                    $"({box.X2},{box.Y2},{box.Z2})"
-                );
-            }
-
-            return TextCommandResult.Success(
-                $"{lastInspection.Count} estruturas encontradas. " +
-                "Use /rumor goto [índice] ou " +
-                "/rumor resolve [índice]."
-            );
-        }
-
-        private TextCommandResult GoToInspectedStructure(
-            TextCommandCallingArgs args
-        )
-        {
-            int index = (int)args[0];
-
-            if (
-                index < 0 ||
-                index >= lastInspection.Count
-            )
-            {
-                return TextCommandResult.Error(
-                    $"Índice inválido. A última inspeção possui " +
-                    $"{lastInspection.Count} resultados."
-                );
-            }
-
-            GeneratedStructure structure =
-                lastInspection[index];
-
-            Cuboidi box = structure.Location;
-            Vec3i center = box.Center;
-
-            double targetX = center.X + 0.5;
-            double targetY = box.Y2 + 2;
-            double targetZ = center.Z + 0.5;
-
-            args.Caller.Entity.TeleportToDouble(
-                targetX,
-                targetY,
-                targetZ
-            );
-
-            return TextCommandResult.Success(
-                $"Indo para [{index}] {structure.Code}. " +
-                $"Centro: {center.X}, {center.Y}, {center.Z}."
-            );
-        }
-
-        private TextCommandResult ResolveInspectedStructure(
-            TextCommandCallingArgs args
-        )
-        {
-            int index = (int)args[0];
-
-            if (
-                index < 0 ||
-                index >= lastInspection.Count
-            )
-            {
-                return TextCommandResult.Error(
-                    $"Índice inválido. A última inspeção possui " +
-                    $"{lastInspection.Count} resultados."
-                );
-            }
-
-            GeneratedStructure structure =
-                lastInspection[index];
-
-            Cuboidi box = structure.Location;
-            Vec3i center = box.Center;
-            StructureKind kind =
-                StructureClassifier.Classify(structure);
-            string family =
-                StructureGrouper.GetFamily(structure);
-
-            RumorSite debugSite = new(
-                $"debug|{kind}|{index}",
-                kind,
-                family,
-                structure.Code ?? string.Empty,
-                box,
-                1
-            );
-
-            RumorRecord debugRecord =
-                RumorRecord.FromSite(debugSite);
-
-            bool resolved =
-                rumorTargetResolver.TryResolve(
-                    debugRecord,
-                    out RumorTarget? target,
-                    out string resolveError
-                );
-
-            if (!resolved || target == null)
-            {
-                return TextCommandResult.Error(
-                    resolveError
-                );
-            }
-
-            logger.Notification(
-                "=== Rumor Network: resolução de debug ==="
-            );
-
-            logger.Notification(
-                $"Index={index} | " +
-                $"Kind={kind} | " +
-                $"Family={family} | " +
-                $"Code={structure.Code ?? "(sem código)"} | " +
-                $"Group={structure.Group ?? "(sem grupo)"}"
-            );
-
-            logger.Notification(
-                $"TrueCenter=(" +
-                $"{center.X}; " +
-                $"{center.Y}; " +
-                $"{center.Z}) | " +
-                $"Box=({box.X1},{box.Y1},{box.Z1})-" +
-                $"({box.X2},{box.Y2},{box.Z2})"
-            );
-
-            logger.Notification(
-                $"ResolvedTarget=(" +
-                $"{target.Position.X:0.0}; " +
-                $"{target.Position.Y:0.0}; " +
-                $"{target.Position.Z:0.0}) | " +
-                $"TargetKind={target.Kind}"
-            );
-
-            return TextCommandResult.Success(
-                $"[{index}] {kind} resolvido como " +
-                $"{target.Kind}. Veja o console."
             );
         }
 

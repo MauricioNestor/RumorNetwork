@@ -1,6 +1,5 @@
 using RumorNetwork.Caves;
 using System;
-using System.Collections.Generic;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
@@ -9,21 +8,22 @@ namespace RumorNetwork.Commands
 {
     public sealed class CaveDebugCommands
     {
-        private const string UndergroundRuinFilter =
-            "undergroundruin";
-
         private readonly ICoreServerAPI api;
         private readonly ILogger logger;
         private readonly IBlockAccessor blockAccessor;
         private readonly CaveCellClassifier caveCellClassifier;
         private readonly CaveBoundaryScanner caveBoundaryScanner;
+        private readonly StructureInspectionState inspectionState;
+        private readonly StructureDebugOverlay debugOverlay;
 
         public CaveDebugCommands(
             ICoreServerAPI api,
             ILogger logger,
             IBlockAccessor blockAccessor,
             CaveCellClassifier caveCellClassifier,
-            CaveBoundaryScanner caveBoundaryScanner
+            CaveBoundaryScanner caveBoundaryScanner,
+            StructureInspectionState inspectionState,
+            StructureDebugOverlay debugOverlay
         )
         {
             this.api = api;
@@ -31,6 +31,8 @@ namespace RumorNetwork.Commands
             this.blockAccessor = blockAccessor;
             this.caveCellClassifier = caveCellClassifier;
             this.caveBoundaryScanner = caveBoundaryScanner;
+            this.inspectionState = inspectionState;
+            this.debugOverlay = debugOverlay;
         }
 
         public void Register(
@@ -50,7 +52,7 @@ namespace RumorNetwork.Commands
             rumorCommand
                 .BeginSubCommand("boundary")
                 .WithDescription(
-                    "Escaneia as bordas de uma underground ruin retornada pelo inspect."
+                    "Escaneia as bordas de uma estrutura retornada pelo último inspect."
                 )
                 .RequiresPlayer()
                 .RequiresPrivilege(Privilege.chat)
@@ -61,7 +63,22 @@ namespace RumorNetwork.Commands
                         int.MaxValue
                     )
                 )
-                .HandleWith(ScanUndergroundRuinBoundary)
+                .HandleWith(ScanInspectedBoundary)
+                .EndSubCommand();
+
+            rumorCommand
+                .BeginSubCommand("overlay")
+                .WithDescription(
+                    "Exibe a estrutura inspecionada ou limpa os overlays."
+                )
+                .RequiresPlayer()
+                .RequiresPrivilege(Privilege.chat)
+                .WithArgs(
+                    api.ChatCommands.Parsers.Word(
+                        "indexOrClear"
+                    )
+                )
+                .HandleWith(ShowOrClearOverlay)
                 .EndSubCommand();
         }
 
@@ -74,9 +91,7 @@ namespace RumorNetwork.Commands
 
             if (player == null)
             {
-                return TextCommandResult.Error(
-                    "O comando precisa ser executado por um jogador."
-                );
+                return PlayerRequiredResult();
             }
 
             BlockSelection? selection =
@@ -152,50 +167,30 @@ namespace RumorNetwork.Commands
             );
         }
 
-        private TextCommandResult ScanUndergroundRuinBoundary(
+        private TextCommandResult ScanInspectedBoundary(
             TextCommandCallingArgs args
         )
         {
             int index = (int)args[0];
-            BlockPos playerPos =
-                args.Caller.Entity.Pos.AsBlockPos;
 
-            IMapRegion? region =
-                GetCurrentRegion(playerPos);
-
-            if (region == null)
+            if (!inspectionState.TryGet(
+                    index,
+                    out GeneratedStructure? structure
+                ) || structure == null)
             {
-                return TextCommandResult.Error(
-                    "A região atual não está carregada."
-                );
+                return InvalidIndexResult();
             }
 
-            List<GeneratedStructure> undergroundRuins =
-                CollectUndergroundRuins(region);
-
-            if (
-                index < 0 ||
-                index >= undergroundRuins.Count
-            )
-            {
-                return TextCommandResult.Error(
-                    $"Índice inválido. A região possui " +
-                    $"{undergroundRuins.Count} underground ruins."
-                );
-            }
-
-            GeneratedStructure structure =
-                undergroundRuins[index];
             Cuboidi box = structure.Location;
-
             CaveBoundaryScanResult result =
                 caveBoundaryScanner.Scan(box);
 
             logger.Notification(
-                "=== Rumor Network: underground ruin boundary ==="
+                "=== Rumor Network: inspected structure boundary ==="
             );
 
             logger.Notification(
+                $"InspectionFilter={inspectionState.Filter} | " +
                 $"Index={index} | " +
                 $"Code={structure.Code ?? "(sem código)"} | " +
                 $"Group={structure.Group ?? "(sem grupo)"} | " +
@@ -217,52 +212,96 @@ namespace RumorNetwork.Commands
             );
         }
 
-        private IMapRegion? GetCurrentRegion(
-            BlockPos playerPos
+        private TextCommandResult ShowOrClearOverlay(
+            TextCommandCallingArgs args
         )
         {
-            long regionIndex =
-                api.WorldManager.MapRegionIndex2DByBlockPos(
-                    playerPos.X,
-                    playerPos.Z
+            IServerPlayer? player =
+                args.Caller.Player as IServerPlayer;
+
+            if (player == null)
+            {
+                return PlayerRequiredResult();
+            }
+
+            string requestedTarget =
+                ((string)args[0]).Trim();
+
+            if (string.Equals(
+                    requestedTarget,
+                    "clear",
+                    StringComparison.OrdinalIgnoreCase
+                ))
+            {
+                debugOverlay.Clear(player);
+
+                return TextCommandResult.Success(
+                    "Overlays de estrutura removidos."
+                );
+            }
+
+            if (!int.TryParse(
+                    requestedTarget,
+                    out int index
+                ) || index < 0)
+            {
+                return TextCommandResult.Error(
+                    "Use /rumor overlay [índice] ou " +
+                    "/rumor overlay clear."
+                );
+            }
+
+            if (!inspectionState.TryGet(
+                    index,
+                    out GeneratedStructure? structure
+                ) || structure == null)
+            {
+                return InvalidIndexResult();
+            }
+
+            CaveBoundaryScanResult boundaryResult =
+                caveBoundaryScanner.Scan(
+                    structure.Location
                 );
 
-            return api.WorldManager.GetMapRegion(
-                regionIndex
+            debugOverlay.Show(
+                player,
+                structure,
+                boundaryResult
+            );
+
+            logger.Notification(
+                "=== Rumor Network: structure overlay ==="
+            );
+
+            logger.Notification(
+                $"InspectionFilter={inspectionState.Filter} | " +
+                $"Index={index} | " +
+                $"Code={structure.Code ?? "(sem código)"} | " +
+                $"Boundary={boundaryResult.Status} | " +
+                $"Openings={boundaryResult.Openings.Count}"
+            );
+
+            return TextCommandResult.Success(
+                $"Overlay [{index}] exibido. " +
+                "Ciano=bounding box, amarelo=centro, " +
+                "verde=opening interna, azul=opening externa."
             );
         }
 
-        private static List<GeneratedStructure>
-            CollectUndergroundRuins(
-                IMapRegion region
-            )
+        private TextCommandResult InvalidIndexResult()
         {
-            List<GeneratedStructure> undergroundRuins = new();
+            return TextCommandResult.Error(
+                $"Índice inválido. A última inspeção possui " +
+                $"{inspectionState.Count} resultados."
+            );
+        }
 
-            foreach (
-                GeneratedStructure structure
-                in region.GeneratedStructures
-            )
-            {
-                bool codeMatches =
-                    structure.Code?.Contains(
-                        UndergroundRuinFilter,
-                        StringComparison.OrdinalIgnoreCase
-                    ) == true;
-
-                bool groupMatches =
-                    structure.Group?.Contains(
-                        UndergroundRuinFilter,
-                        StringComparison.OrdinalIgnoreCase
-                    ) == true;
-
-                if (codeMatches || groupMatches)
-                {
-                    undergroundRuins.Add(structure);
-                }
-            }
-
-            return undergroundRuins;
+        private static TextCommandResult PlayerRequiredResult()
+        {
+            return TextCommandResult.Error(
+                "O comando precisa ser executado por um jogador."
+            );
         }
 
         private static string FormatBlock(
