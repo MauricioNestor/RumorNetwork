@@ -138,7 +138,10 @@ namespace RumorNetwork.Commands
                 "Localização de comerciante comprada. " +
                 $"Distância a partir do vendedor: " +
                 $"{result.TargetDistance:0} blocos. " +
-                $"Pago: {result.Price.Description}."
+                $"Pago: {result.Price.Description}. " +
+                $"Este vendedor ainda possui " +
+                $"{result.SellerPurchasesRemaining} " +
+                "localizações para você."
             );
         }
 
@@ -158,7 +161,8 @@ namespace RumorNetwork.Commands
                 traderKnowledgeRegistry.Clear(
                     player.PlayerUID,
                     out int revealedCount,
-                    out int visitedCount
+                    out int visitedCount,
+                    out int purchaseCount
                 );
 
             if (!cleared)
@@ -172,7 +176,8 @@ namespace RumorNetwork.Commands
             return TextCommandResult.Success(
                 "Conhecimento de comerciantes limpo. " +
                 $"Revelados={revealedCount} | " +
-                $"Visitados={visitedCount}."
+                $"Visitados={visitedCount} | " +
+                $"Compras={purchaseCount}."
             );
         }
 
