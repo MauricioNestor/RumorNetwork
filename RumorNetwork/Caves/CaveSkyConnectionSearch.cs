@@ -53,7 +53,7 @@ namespace RumorNetwork.Caves
 
             Vec3i sourceCenter = sourceBox.Center;
             Queue<SearchNode> frontier = new();
-            HashSet<(int X, int Y, int Z)> visited = new();
+            HashSet<(int X, int Y, int Z)> examined = new();
 
             int startingOpeningCount = 0;
             int visitedCellCount = 0;
@@ -65,7 +65,7 @@ namespace RumorNetwork.Caves
                 BlockPos start = opening.OutsidePosition;
                 var key = ToKey(start);
 
-                if (!visited.Add(key))
+                if (!examined.Add(key))
                 {
                     continue;
                 }
@@ -153,7 +153,7 @@ namespace RumorNetwork.Caves
 
                     var neighborKey = ToKey(neighbor);
 
-                    if (visited.Contains(neighborKey))
+                    if (!examined.Add(neighborKey))
                     {
                         continue;
                     }
@@ -181,7 +181,6 @@ namespace RumorNetwork.Caves
                         continue;
                     }
 
-                    visited.Add(neighborKey);
                     frontier.Enqueue(
                         new SearchNode(
                             neighbor,
