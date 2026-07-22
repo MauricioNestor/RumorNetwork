@@ -86,6 +86,11 @@ namespace RumorNetwork.Commands
                     StructureKind.Trader
                 );
 
+            int translocatorCount =
+                rumorRegistry.CountByKind(
+                    StructureKind.Translocator
+                );
+
             logger.Notification(
                 $"=== Rumor Network: indexação | " +
                 $"Regions={loadedRegionCount}/" +
@@ -94,13 +99,15 @@ namespace RumorNetwork.Commands
                 $"Sites={sites.Count} | " +
                 $"Added={addedCount} | " +
                 $"Registry={rumorRegistry.Count} | " +
-                $"Traders={traderCount} ==="
+                $"Traders={traderCount} | " +
+                $"Translocators={translocatorCount} ==="
             );
 
             return TextCommandResult.Success(
                 $"{addedCount} novos locais adicionados. " +
                 $"Registro total: {rumorRegistry.Count}. " +
-                $"Traders indexados: {traderCount}."
+                $"Traders: {traderCount}. " +
+                $"Translocators: {translocatorCount}."
             );
         }
 
@@ -128,6 +135,11 @@ namespace RumorNetwork.Commands
                     StructureKind.Trader
                 );
 
+            int translocators =
+                rumorRegistry.CountByKind(
+                    StructureKind.Translocator
+                );
+
             logger.Notification(
                 "=== Rumor Network: registro persistente ==="
             );
@@ -138,6 +150,10 @@ namespace RumorNetwork.Commands
 
             logger.Notification(
                 $"Traders: {traders}"
+            );
+
+            logger.Notification(
+                $"Translocators: {translocators}"
             );
 
             logger.Notification(
@@ -154,7 +170,8 @@ namespace RumorNetwork.Commands
 
             return TextCommandResult.Success(
                 $"{rumorRegistry.Count} rumores registrados. " +
-                $"Traders indexados: {traders}."
+                $"Traders={traders} | " +
+                $"Translocators={translocators}."
             );
         }
     }
