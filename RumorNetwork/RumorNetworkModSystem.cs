@@ -13,134 +13,78 @@ namespace RumorNetwork
 {
     public class RumorNetworkModSystem : ModSystem
     {
-        private const string RumorRegistrySaveKey =
-            "rumornetwork:registry-v1";
+        private const string RumorRegistrySaveKey = "rumornetwork:registry-v1";
+        private const string TraderKnowledgeSaveKey = "rumornetwork:trader-knowledge-v1";
+        private const string RemoteCatalogSaveKey = "rumornetwork:remote-catalog-v1";
 
-        private const string TraderKnowledgeSaveKey =
-            "rumornetwork:trader-knowledge-v1";
-
-        private const string RemoteCatalogSaveKey =
-            "rumornetwork:remote-catalog-v1";
-
-        private readonly RumorRegistry rumorRegistry =
-            new();
-
-        private readonly TraderKnowledgeRegistry
-            traderKnowledgeRegistry = new();
+        private readonly RumorRegistry rumorRegistry = new();
+        private readonly TraderKnowledgeRegistry traderKnowledgeRegistry = new();
 
         private ICoreServerAPI serverApi = null!;
         private RumorTargetResolver rumorTargetResolver = null!;
         private RumorDeliveryService rumorDeliveryService = null!;
         private RumorPurchaseService rumorPurchaseService = null!;
         private RumorOfferService rumorOfferService = null!;
-        private TraderLocationPurchaseService
-            traderLocationPurchaseService = null!;
-        private SelectiveStructureCatalogService
-            selectiveCatalogService = null!;
+        private TraderLocationPurchaseService traderLocationPurchaseService = null!;
+        private SelectiveStructureCatalogService selectiveCatalogService = null!;
         private CaveCellClassifier caveCellClassifier = null!;
         private CaveBoundaryScanner caveBoundaryScanner = null!;
         private CaveSkyConnectionSearch caveSkyConnectionSearch = null!;
 
         private int RegionSearchRadius { get; set; } = 1;
 
-        public override void StartServerSide(
-            ICoreServerAPI api
-        )
+        public override void StartServerSide(ICoreServerAPI api)
         {
             serverApi = api;
 
-            RumorNetworkConfig config =
-                RumorConfigLoader.Load(
-                    api,
-                    Mod.Logger
-                );
+            RumorNetworkConfig config = RumorConfigLoader.Load(api, Mod.Logger);
 
-            caveCellClassifier =
-                new CaveCellClassifier(
-                    api.World.BlockAccessor
-                );
+            caveCellClassifier = new CaveCellClassifier(api.World.BlockAccessor);
+            caveBoundaryScanner = new CaveBoundaryScanner(api.World.BlockAccessor, caveCellClassifier);
+            caveSkyConnectionSearch = new CaveSkyConnectionSearch(api.World.BlockAccessor, caveCellClassifier);
+            rumorTargetResolver = new RumorTargetResolver(caveBoundaryScanner, caveSkyConnectionSearch);
 
-            caveBoundaryScanner =
-                new CaveBoundaryScanner(
-                    api.World.BlockAccessor,
-                    caveCellClassifier
-                );
+            rumorDeliveryService = new RumorDeliveryService(
+                api,
+                Mod.Logger,
+                rumorRegistry,
+                rumorTargetResolver
+            );
 
-            caveSkyConnectionSearch =
-                new CaveSkyConnectionSearch(
-                    api.World.BlockAccessor,
-                    caveCellClassifier
-                );
+            RumorPriceResolver priceResolver = new(api.World, config);
+            RumorInventoryPaymentService paymentService = new(api, Mod.Logger);
 
-            rumorTargetResolver =
-                new RumorTargetResolver(
-                    caveBoundaryScanner,
-                    caveSkyConnectionSearch
-                );
+            selectiveCatalogService = new SelectiveStructureCatalogService(
+                api,
+                Mod.Logger,
+                rumorRegistry,
+                config.RemoteCatalog
+            );
 
-            rumorDeliveryService =
-                new RumorDeliveryService(
-                    api,
-                    Mod.Logger,
-                    rumorRegistry,
-                    rumorTargetResolver
-                );
+            rumorPurchaseService = new RumorPurchaseService(
+                rumorDeliveryService,
+                priceResolver,
+                paymentService,
+                selectiveCatalogService
+            );
 
-            RumorPriceResolver priceResolver =
-                new(
-                    api.World,
-                    config
-                );
+            rumorOfferService = new RumorOfferService(config, priceResolver);
 
-            RumorInventoryPaymentService
-                paymentService =
-                    new(
-                        api,
-                        Mod.Logger
-                    );
+            TraderLocationSelector traderSelector = new(rumorRegistry);
+            traderLocationPurchaseService = new TraderLocationPurchaseService(
+                api,
+                Mod.Logger,
+                config,
+                rumorTargetResolver,
+                priceResolver,
+                paymentService,
+                traderKnowledgeRegistry,
+                traderSelector,
+                selectiveCatalogService
+            );
 
-            rumorPurchaseService =
-                new RumorPurchaseService(
-                    rumorDeliveryService,
-                    priceResolver,
-                    paymentService
-                );
-
-            rumorOfferService =
-                new RumorOfferService(
-                    config,
-                    priceResolver
-                );
-
-            selectiveCatalogService =
-                new SelectiveStructureCatalogService(
-                    api,
-                    Mod.Logger,
-                    rumorRegistry,
-                    config.RemoteCatalog
-                );
-
-            TraderLocationSelector traderSelector =
-                new(rumorRegistry);
-
-            traderLocationPurchaseService =
-                new TraderLocationPurchaseService(
-                    api,
-                    Mod.Logger,
-                    config,
-                    rumorTargetResolver,
-                    priceResolver,
-                    paymentService,
-                    traderKnowledgeRegistry,
-                    traderSelector,
-                    selectiveCatalogService
-                );
-
-            api.Event.SaveGameLoaded +=
-                OnSaveGameLoaded;
-
-            api.Event.GameWorldSave +=
-                OnGameWorldSave;
+            api.Event.SaveGameLoaded += OnSaveGameLoaded;
+            api.Event.GameWorldSave += OnGameWorldSave;
 
             RumorCommandRegistrar.Register(
                 api,
@@ -159,9 +103,7 @@ namespace RumorNetwork
                 RegionSearchRadius
             );
 
-            Mod.Logger.Notification(
-                "Rumor Network carregado no servidor."
-            );
+            Mod.Logger.Notification("Rumor Network carregado no servidor.");
         }
 
         public override void Dispose()
@@ -172,68 +114,45 @@ namespace RumorNetwork
 
         private void OnSaveGameLoaded()
         {
-            RumorRegistrySaveData rumorSaveData =
-                serverApi.WorldManager.SaveGame.GetData(
-                    RumorRegistrySaveKey,
-                    new RumorRegistrySaveData()
-                );
-
+            RumorRegistrySaveData rumorSaveData = serverApi.WorldManager.SaveGame.GetData(
+                RumorRegistrySaveKey,
+                new RumorRegistrySaveData()
+            );
             rumorRegistry.Import(rumorSaveData);
 
-            TraderKnowledgeSaveData traderSaveData =
-                serverApi.WorldManager.SaveGame.GetData(
-                    TraderKnowledgeSaveKey,
-                    new TraderKnowledgeSaveData()
-                );
-
-            traderKnowledgeRegistry.Import(
-                traderSaveData
+            TraderKnowledgeSaveData traderSaveData = serverApi.WorldManager.SaveGame.GetData(
+                TraderKnowledgeSaveKey,
+                new TraderKnowledgeSaveData()
             );
+            traderKnowledgeRegistry.Import(traderSaveData);
 
-            SelectiveStructureCatalogSaveData
-                catalogSaveData =
-                    serverApi.WorldManager.SaveGame.GetData(
-                        RemoteCatalogSaveKey,
-                        new SelectiveStructureCatalogSaveData()
-                    );
-
-            selectiveCatalogService.Import(
-                catalogSaveData
+            SelectiveStructureCatalogSaveData catalogSaveData = serverApi.WorldManager.SaveGame.GetData(
+                RemoteCatalogSaveKey,
+                new SelectiveStructureCatalogSaveData()
             );
-
+            selectiveCatalogService.Import(catalogSaveData);
             selectiveCatalogService.Start();
 
             Mod.Logger.Notification(
-                $"Rumor Network carregou " +
-                $"{rumorRegistry.Count} rumores persistidos."
+                $"Rumor Network carregou {rumorRegistry.Count} rumores persistidos."
             );
         }
 
         private void OnGameWorldSave()
         {
-            RumorRegistrySaveData rumorSaveData =
-                rumorRegistry.Export();
-
             serverApi.WorldManager.SaveGame.StoreData(
                 RumorRegistrySaveKey,
-                rumorSaveData
+                rumorRegistry.Export()
             );
-
-            TraderKnowledgeSaveData traderSaveData =
-                traderKnowledgeRegistry.Export();
 
             serverApi.WorldManager.SaveGame.StoreData(
                 TraderKnowledgeSaveKey,
-                traderSaveData
+                traderKnowledgeRegistry.Export()
             );
-
-            SelectiveStructureCatalogSaveData
-                catalogSaveData =
-                    selectiveCatalogService.Export();
 
             serverApi.WorldManager.SaveGame.StoreData(
                 RemoteCatalogSaveKey,
-                catalogSaveData
+                selectiveCatalogService.Export()
             );
         }
     }
