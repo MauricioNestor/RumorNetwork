@@ -14,10 +14,8 @@ namespace RumorNetwork
         private readonly RumorRegistry rumorRegistry =
             new();
 
-        private readonly RumorTargetResolver
-            rumorTargetResolver = new();
-
         private ICoreServerAPI serverApi = null!;
+        private RumorTargetResolver rumorTargetResolver = null!;
         private RumorDeliveryService rumorDeliveryService = null!;
         private CaveCellClassifier caveCellClassifier = null!;
         private CaveBoundaryScanner caveBoundaryScanner = null!;
@@ -30,14 +28,6 @@ namespace RumorNetwork
         )
         {
             serverApi = api;
-
-            rumorDeliveryService =
-                new RumorDeliveryService(
-                    api,
-                    Mod.Logger,
-                    rumorRegistry,
-                    rumorTargetResolver
-                );
 
             caveCellClassifier =
                 new CaveCellClassifier(
@@ -54,6 +44,20 @@ namespace RumorNetwork
                 new CaveSkyConnectionSearch(
                     api.World.BlockAccessor,
                     caveCellClassifier
+                );
+
+            rumorTargetResolver =
+                new RumorTargetResolver(
+                    caveBoundaryScanner,
+                    caveSkyConnectionSearch
+                );
+
+            rumorDeliveryService =
+                new RumorDeliveryService(
+                    api,
+                    Mod.Logger,
+                    rumorRegistry,
+                    rumorTargetResolver
                 );
 
             api.Event.SaveGameLoaded +=
