@@ -113,9 +113,10 @@ public sealed class RumorRegistry
             if (
                 candidate.Knowledge
                 == RumorKnowledgeLevel.NotSold &&
-                RumorEligibilityPolicy.IsEligible(
-                    candidate.Kind
-                )
+                RumorEligibilityPolicy
+                    .IsGeneralRumorEligible(
+                        candidate.Kind
+                    )
             )
             {
                 candidates.Add(candidate);
