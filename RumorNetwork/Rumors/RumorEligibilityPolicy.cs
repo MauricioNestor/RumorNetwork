@@ -4,7 +4,7 @@ namespace RumorNetwork.Rumors;
 
 public static class RumorEligibilityPolicy
 {
-    public static bool IsEligible(
+    public static bool IsIndexable(
         StructureKind kind
     )
     {
@@ -15,5 +15,24 @@ public static class RumorEligibilityPolicy
             StructureKind.SurfaceRuin or
             StructureKind.RuinedVillage or
             StructureKind.Translocator;
+    }
+
+    public static bool IsGeneralRumorEligible(
+        StructureKind kind
+    )
+    {
+        return kind is
+            StructureKind.UndergroundRuin or
+            StructureKind.BetterRuin or
+            StructureKind.SurfaceRuin or
+            StructureKind.RuinedVillage or
+            StructureKind.Translocator;
+    }
+
+    public static bool IsEligible(
+        StructureKind kind
+    )
+    {
+        return IsIndexable(kind);
     }
 }
