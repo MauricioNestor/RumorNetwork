@@ -51,7 +51,49 @@ namespace RumorNetwork.Caves
                 );
             }
 
-            Vec3i sourceCenter = sourceBox.Center;
+            List<SearchSeed> seeds = new(openings.Count);
+
+            foreach (CaveBoundaryOpening opening in openings)
+            {
+                seeds.Add(
+                    new SearchSeed(
+                        Copy(opening.OutsidePosition),
+                        opening
+                    )
+                );
+            }
+
+            return Search(
+                sourceBox.Center,
+                seeds
+            );
+        }
+
+        public CaveSkyConnectionResult SearchFrom(
+            BlockPos startPosition
+        )
+        {
+            return Search(
+                new Vec3i(
+                    startPosition.X,
+                    startPosition.Y,
+                    startPosition.Z
+                ),
+                new List<SearchSeed>
+                {
+                    new(
+                        Copy(startPosition),
+                        null
+                    )
+                }
+            );
+        }
+
+        private CaveSkyConnectionResult Search(
+            Vec3i sourceCenter,
+            IReadOnlyList<SearchSeed> seeds
+        )
+        {
             Queue<SearchNode> frontier = new();
             HashSet<(int X, int Y, int Z)> examined = new();
 
@@ -60,9 +102,9 @@ namespace RumorNetwork.Caves
             int unavailableNeighborCount = 0;
             int limitedNeighborCount = 0;
 
-            foreach (CaveBoundaryOpening opening in openings)
+            foreach (SearchSeed seed in seeds)
             {
-                BlockPos start = opening.OutsidePosition;
+                BlockPos start = seed.Position;
                 var key = ToKey(start);
 
                 if (!examined.Add(key))
@@ -87,7 +129,7 @@ namespace RumorNetwork.Caves
                 frontier.Enqueue(
                     new SearchNode(
                         Copy(start),
-                        opening
+                        seed.SourceOpening
                     )
                 );
 
@@ -306,15 +348,31 @@ namespace RumorNetwork.Caves
             );
         }
 
+        private readonly struct SearchSeed
+        {
+            public BlockPos Position { get; }
+
+            public CaveBoundaryOpening? SourceOpening { get; }
+
+            public SearchSeed(
+                BlockPos position,
+                CaveBoundaryOpening? sourceOpening
+            )
+            {
+                Position = position;
+                SourceOpening = sourceOpening;
+            }
+        }
+
         private readonly struct SearchNode
         {
             public BlockPos Position { get; }
 
-            public CaveBoundaryOpening SourceOpening { get; }
+            public CaveBoundaryOpening? SourceOpening { get; }
 
             public SearchNode(
                 BlockPos position,
-                CaveBoundaryOpening sourceOpening
+                CaveBoundaryOpening? sourceOpening
             )
             {
                 Position = position;
