@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
@@ -59,34 +60,34 @@ namespace RumorNetwork.Rumors
             }
 
             bool targetResolved =
-                rumorTargetResolver.TryResolve(
+                rumorTargetResolver.TryResolveAll(
                     record,
-                    out RumorTarget? target,
+                    out RumorTargetResolution? resolution,
                     out string targetError
                 );
 
             if (
                 !targetResolved ||
-                target == null
+                resolution == null
             )
             {
                 error = targetError;
                 return false;
             }
 
-            bool waypointAdded =
-                RumorWaypointService.TryAddWaypoint(
+            bool waypointsAdded =
+                RumorWaypointService.TryAddWaypoints(
                     api,
                     player,
                     record,
                     knowledge,
-                    target,
+                    resolution,
                     api.World.Rand,
-                    out Vec3d waypointPosition,
+                    out IReadOnlyList<Vec3d> waypointPositions,
                     out string waypointError
                 );
 
-            if (!waypointAdded)
+            if (!waypointsAdded)
             {
                 error = waypointError;
                 return false;
@@ -101,13 +102,13 @@ namespace RumorNetwork.Rumors
             if (!committed)
             {
                 logger.Error(
-                    $"O waypoint do rumor {record.Id} " +
-                    "foi criado, mas o registro não pôde " +
+                    $"Os waypoints do rumor {record.Id} " +
+                    "foram criados, mas o registro não pôde " +
                     "ser marcado como vendido."
                 );
 
                 error =
-                    "A localização foi adicionada ao mapa, " +
+                    "As localizações foram adicionadas ao mapa, " +
                     "mas o rumor não pôde ser registrado " +
                     "como vendido.";
 
@@ -117,8 +118,8 @@ namespace RumorNetwork.Rumors
             LogDelivery(
                 record,
                 knowledge,
-                target,
-                waypointPosition
+                resolution,
+                waypointPositions
             );
 
             deliveredRecord = record;
@@ -128,8 +129,8 @@ namespace RumorNetwork.Rumors
         private void LogDelivery(
             RumorRecord record,
             RumorKnowledgeLevel knowledge,
-            RumorTarget target,
-            Vec3d waypointPosition
+            RumorTargetResolution resolution,
+            IReadOnlyList<Vec3d> waypointPositions
         )
         {
             Cuboidi box =
@@ -150,7 +151,8 @@ namespace RumorNetwork.Rumors
                 $"Knowledge={knowledge} | " +
                 $"Kind={record.Kind} | " +
                 $"Family={record.Family} | " +
-                $"Parts={record.PartCount}"
+                $"Parts={record.PartCount} | " +
+                $"Waypoints={waypointPositions.Count}"
             );
 
             logger.Notification(
@@ -162,20 +164,40 @@ namespace RumorNetwork.Rumors
                 $"({box.X2},{box.Y2},{box.Z2})"
             );
 
-            logger.Notification(
-                $"ResolvedTarget=(" +
-                $"{target.Position.X:0.0}; " +
-                $"{target.Position.Y:0.0}; " +
-                $"{target.Position.Z:0.0}) | " +
-                $"TargetKind={target.Kind}"
-            );
+            for (
+                int index = 0;
+                index < resolution.Targets.Count;
+                index++
+            )
+            {
+                RumorTarget target =
+                    resolution.Targets[index];
 
-            logger.Notification(
-                $"Waypoint=(" +
-                $"{waypointPosition.X:0.0}; " +
-                $"{waypointPosition.Y:0.0}; " +
-                $"{waypointPosition.Z:0.0})"
-            );
+                logger.Notification(
+                    $"ResolvedTarget[{index}]=(" +
+                    $"{target.Position.X:0.0}; " +
+                    $"{target.Position.Y:0.0}; " +
+                    $"{target.Position.Z:0.0}) | " +
+                    $"TargetKind={target.Kind}"
+                );
+            }
+
+            for (
+                int index = 0;
+                index < waypointPositions.Count;
+                index++
+            )
+            {
+                Vec3d waypointPosition =
+                    waypointPositions[index];
+
+                logger.Notification(
+                    $"Waypoint[{index}]=(" +
+                    $"{waypointPosition.X:0.0}; " +
+                    $"{waypointPosition.Y:0.0}; " +
+                    $"{waypointPosition.Z:0.0})"
+                );
+            }
         }
     }
 }
