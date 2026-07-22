@@ -17,5 +17,9 @@ namespace RumorNetwork.Traders
         [ProtoMember(3)]
         public List<string> VisitedTraderIds
             { get; set; } = new();
+
+        [ProtoMember(4)]
+        public List<TraderSellerPurchaseRecord>
+            SellerPurchases { get; set; } = new();
     }
 }
