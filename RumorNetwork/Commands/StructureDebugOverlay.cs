@@ -57,9 +57,9 @@ namespace RumorNetwork.Commands
                         box.MinZ
                     ),
                     new BlockPos(
-                        box.MaxX - 1,
-                        box.MaxY - 1,
-                        box.MaxZ - 1
+                        box.MaxX,
+                        box.MaxY,
+                        box.MaxZ
                     )
                 },
                 BoundingBoxColor,
