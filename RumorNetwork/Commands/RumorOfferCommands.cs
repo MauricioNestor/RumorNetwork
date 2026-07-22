@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text;
 using RumorNetwork.Offers;
 using RumorNetwork.Traders;
@@ -11,16 +12,22 @@ namespace RumorNetwork.Commands
         private readonly RumorOfferService offerService;
         private readonly TraderLocationPurchaseService
             traderPurchaseService;
+        private readonly TraderKnowledgeRegistry
+            traderKnowledgeRegistry;
 
         public RumorOfferCommands(
             RumorOfferService offerService,
             TraderLocationPurchaseService
-                traderPurchaseService
+                traderPurchaseService,
+            TraderKnowledgeRegistry
+                traderKnowledgeRegistry
         )
         {
             this.offerService = offerService;
             this.traderPurchaseService =
                 traderPurchaseService;
+            this.traderKnowledgeRegistry =
+                traderKnowledgeRegistry;
         }
 
         public void Register(
@@ -48,6 +55,17 @@ namespace RumorNetwork.Commands
                 .RequiresPrivilege(Privilege.chat)
                 .HandleWith(BuyTraderLocation)
                 .EndSubCommand();
+
+            rumorCommand
+                .BeginSubCommand("cleartraderknowledge")
+                .WithDescription(
+                    "Limpa o conhecimento de comerciantes " +
+                    "do jogador para debug."
+                )
+                .RequiresPlayer()
+                .RequiresPrivilege(Privilege.chat)
+                .HandleWith(ClearTraderKnowledge)
+                .EndSubCommand();
         }
 
         private TextCommandResult ListOffers(
@@ -56,7 +74,7 @@ namespace RumorNetwork.Commands
         {
             bool resolved =
                 offerService.TryGetOffers(
-                    out var offers,
+                    out IReadOnlyList<RumorOffer> offers,
                     out string error
                 );
 
@@ -101,10 +119,7 @@ namespace RumorNetwork.Commands
 
             if (player == null)
             {
-                return TextCommandResult.Error(
-                    "O comando precisa ser executado " +
-                    "por um jogador."
-                );
+                return PlayerRequiredResult();
             }
 
             bool purchased =
@@ -124,6 +139,49 @@ namespace RumorNetwork.Commands
                 $"Distância a partir do vendedor: " +
                 $"{result.TargetDistance:0} blocos. " +
                 $"Pago: {result.Price.Description}."
+            );
+        }
+
+        private TextCommandResult ClearTraderKnowledge(
+            TextCommandCallingArgs args
+        )
+        {
+            IServerPlayer? player =
+                args.Caller.Player as IServerPlayer;
+
+            if (player == null)
+            {
+                return PlayerRequiredResult();
+            }
+
+            bool cleared =
+                traderKnowledgeRegistry.Clear(
+                    player.PlayerUID,
+                    out int revealedCount,
+                    out int visitedCount
+                );
+
+            if (!cleared)
+            {
+                return TextCommandResult.Success(
+                    "O jogador ainda não possuía " +
+                    "conhecimento de comerciantes."
+                );
+            }
+
+            return TextCommandResult.Success(
+                "Conhecimento de comerciantes limpo. " +
+                $"Revelados={revealedCount} | " +
+                $"Visitados={visitedCount}."
+            );
+        }
+
+        private static TextCommandResult
+            PlayerRequiredResult()
+        {
+            return TextCommandResult.Error(
+                "O comando precisa ser executado " +
+                "por um jogador."
             );
         }
     }
