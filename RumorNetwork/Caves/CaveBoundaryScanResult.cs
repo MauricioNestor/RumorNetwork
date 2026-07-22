@@ -1,10 +1,13 @@
 using System.Collections.Generic;
+using Vintagestory.API.MathTools;
 
 namespace RumorNetwork.Caves
 {
     public sealed class CaveBoundaryScanResult
     {
         public CaveBoundaryScanStatus Status { get; }
+
+        public Cuboidi ScannedBox { get; }
 
         public IReadOnlyList<CaveBoundaryOpening> Openings { get; }
 
@@ -18,6 +21,7 @@ namespace RumorNetwork.Caves
 
         public CaveBoundaryScanResult(
             CaveBoundaryScanStatus status,
+            Cuboidi scannedBox,
             IReadOnlyList<CaveBoundaryOpening> openings,
             int scannedPairCount,
             int unknownPairCount,
@@ -25,6 +29,14 @@ namespace RumorNetwork.Caves
         )
         {
             Status = status;
+            ScannedBox = new Cuboidi(
+                scannedBox.X1,
+                scannedBox.Y1,
+                scannedBox.Z1,
+                scannedBox.X2,
+                scannedBox.Y2,
+                scannedBox.Z2
+            );
             Openings = openings;
             ScannedPairCount = scannedPairCount;
             UnknownPairCount = unknownPairCount;
