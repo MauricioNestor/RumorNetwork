@@ -64,12 +64,12 @@ namespace RumorNetwork.Caves
         )
         {
             return new Cuboidi(
-                structureBox.MinX,
-                structureBox.MinY,
+                structureBox.MinX + 1,
+                structureBox.MinY + 1,
                 structureBox.MinZ,
-                structureBox.MaxX - 1,
-                structureBox.MaxY - 1,
-                structureBox.MaxZ - 1
+                structureBox.MaxX,
+                structureBox.MaxY,
+                structureBox.MaxZ
             );
         }
     }
