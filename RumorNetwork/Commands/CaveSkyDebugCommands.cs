@@ -48,6 +48,16 @@ namespace RumorNetwork.Commands
                 )
                 .HandleWith(SearchSkyConnection)
                 .EndSubCommand();
+
+            rumorCommand
+                .BeginSubCommand("skyhere")
+                .WithDescription(
+                    "Procura uma rota da célula do jogador até o céu."
+                )
+                .RequiresPlayer()
+                .RequiresPrivilege(Privilege.chat)
+                .HandleWith(SearchSkyFromPlayer)
+                .EndSubCommand();
         }
 
         private TextCommandResult SearchSkyConnection(
@@ -95,6 +105,59 @@ namespace RumorNetwork.Commands
                 $"Sky [{index}]: {skyResult.Status}. " +
                 $"Openings={boundaryResult.Openings.Count}, " +
                 $"visitadas={skyResult.VisitedCellCount}." +
+                skyText +
+                " Veja o console."
+            );
+        }
+
+        private TextCommandResult SearchSkyFromPlayer(
+            TextCommandCallingArgs args
+        )
+        {
+            IServerPlayer? player =
+                args.Caller.Player as IServerPlayer;
+
+            if (player == null)
+            {
+                return TextCommandResult.Error(
+                    "O comando precisa ser executado por um jogador."
+                );
+            }
+
+            BlockPos start = args.Caller.Entity.Pos.AsBlockPos;
+            CaveSkyConnectionResult result =
+                skyConnectionSearch.SearchFrom(start);
+
+            logger.Notification(
+                "=== Rumor Network: cave sky from player ==="
+            );
+
+            logger.Notification(
+                $"Start=({start.X},{start.Y},{start.Z}) | " +
+                $"Status={result.Status} | " +
+                $"Visited={result.VisitedCellCount} | " +
+                $"Unavailable={result.UnavailableNeighborCount} | " +
+                $"Limited={result.LimitedNeighborCount}"
+            );
+
+            if (result.SkyPosition != null)
+            {
+                BlockPos sky = result.SkyPosition;
+
+                logger.Notification(
+                    $"SkyPosition=({sky.X},{sky.Y},{sky.Z})"
+                );
+            }
+
+            string skyText = result.SkyPosition == null
+                ? ""
+                : $" Céu=({result.SkyPosition.X}," +
+                  $"{result.SkyPosition.Y}," +
+                  $"{result.SkyPosition.Z}).";
+
+            return TextCommandResult.Success(
+                $"SkyHere: {result.Status}. " +
+                $"Visitadas={result.VisitedCellCount}." +
                 skyText +
                 " Veja o console."
             );
