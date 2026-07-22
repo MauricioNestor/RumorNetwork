@@ -67,9 +67,9 @@ namespace RumorNetwork.Caves
                 structureBox.MinX + 1,
                 structureBox.MinY + 1,
                 structureBox.MinZ,
-                structureBox.MaxX,
-                structureBox.MaxY,
-                structureBox.MaxZ
+                structureBox.MaxX - 1,
+                structureBox.MaxY - 1,
+                structureBox.MaxZ - 1
             );
         }
     }
