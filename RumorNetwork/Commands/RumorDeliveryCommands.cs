@@ -92,10 +92,12 @@ namespace RumorNetwork.Commands
             if (!TryReadKnowledge(
                     args,
                     out RumorKnowledgeLevel knowledge,
-                    out TextCommandResult parseError
+                    out string parseError
                 ))
             {
-                return parseError;
+                return TextCommandResult.Error(
+                    parseError
+                );
             }
 
             bool delivered =
@@ -136,10 +138,12 @@ namespace RumorNetwork.Commands
             if (!TryReadKnowledge(
                     args,
                     out RumorKnowledgeLevel knowledge,
-                    out TextCommandResult parseError
+                    out string parseError
                 ))
             {
-                return parseError;
+                return TextCommandResult.Error(
+                    parseError
+                );
             }
 
             bool purchased =
@@ -204,7 +208,7 @@ namespace RumorNetwork.Commands
         private static bool TryReadKnowledge(
             TextCommandCallingArgs args,
             out RumorKnowledgeLevel knowledge,
-            out TextCommandResult error
+            out string error
         )
         {
             string requestedKnowledge =
@@ -215,14 +219,13 @@ namespace RumorNetwork.Commands
                     out knowledge
                 ))
             {
-                error = TextCommandResult.Success();
+                error = string.Empty;
                 return true;
             }
 
-            error = TextCommandResult.Error(
+            error =
                 "Tipo inválido. " +
-                "Use approximate ou exact."
-            );
+                "Use approximate ou exact.";
 
             return false;
         }
