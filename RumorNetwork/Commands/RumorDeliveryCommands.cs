@@ -34,6 +34,16 @@ namespace RumorNetwork.Commands
                 )
                 .HandleWith(DrawRumor)
                 .EndSubCommand();
+
+            rumorCommand
+                .BeginSubCommand("clearwaypoints")
+                .WithDescription(
+                    "Remove os waypoints criados pelo Rumor Network."
+                )
+                .RequiresPlayer()
+                .RequiresPrivilege(Privilege.chat)
+                .HandleWith(ClearRumorWaypoints)
+                .EndSubCommand();
         }
 
         private TextCommandResult DrawRumor(
@@ -90,6 +100,43 @@ namespace RumorNetwork.Commands
                 $"Rumor sorteado: {record.Kind}. " +
                 $"Localização {precisionText} " +
                 "adicionada ao mapa."
+            );
+        }
+
+        private TextCommandResult ClearRumorWaypoints(
+            TextCommandCallingArgs args
+        )
+        {
+            IServerPlayer? player =
+                args.Caller.Player as IServerPlayer;
+
+            if (player == null)
+            {
+                return TextCommandResult.Error(
+                    "O comando precisa ser " +
+                    "executado por um jogador."
+                );
+            }
+
+            bool cleared =
+                RumorWaypointService.TryClearWaypoints(
+                    api,
+                    player,
+                    out int removedCount,
+                    out string clearError
+                );
+
+            if (!cleared)
+            {
+                return TextCommandResult.Error(
+                    clearError
+                );
+            }
+
+            return TextCommandResult.Success(
+                removedCount == 1
+                    ? "1 waypoint do Rumor Network removido."
+                    : $"{removedCount} waypoints do Rumor Network removidos."
             );
         }
 

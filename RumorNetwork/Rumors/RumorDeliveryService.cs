@@ -44,13 +44,13 @@ namespace RumorNetwork.Rumors
                 return false;
             }
 
-            bool selected =
-                rumorRegistry.TryPickRandomNotSold(
-                    api.World.Rand,
-                    out RumorRecord? record
-                );
+            List<RumorRecord> candidates =
+                rumorRegistry
+                    .CreateShuffledNotSoldCandidates(
+                        api.World.Rand
+                    );
 
-            if (!selected || record == null)
+            if (candidates.Count == 0)
             {
                 error =
                     "Não existem rumores " +
@@ -59,71 +59,179 @@ namespace RumorNetwork.Rumors
                 return false;
             }
 
-            bool targetResolved =
-                rumorTargetResolver.TryResolveAll(
-                    record,
-                    out RumorTargetResolution? resolution,
-                    out string targetError
-                );
+            Dictionary<
+                RumorResolutionFailureKind,
+                int
+            > failures = new();
 
-            if (
-                !targetResolved ||
-                resolution == null
-            )
+            foreach (RumorRecord record in candidates)
             {
-                error = targetError;
-                return false;
-            }
+                bool targetResolved =
+                    rumorTargetResolver.TryResolveAll(
+                        record,
+                        out RumorTargetResolution? resolution,
+                        out RumorResolutionFailureKind failure,
+                        out string targetError
+                    );
 
-            bool waypointsAdded =
-                RumorWaypointService.TryAddWaypoints(
-                    api,
-                    player,
+                if (
+                    !targetResolved ||
+                    resolution == null
+                )
+                {
+                    IncrementFailure(
+                        failures,
+                        failure
+                    );
+
+                    logger.VerboseDebug(
+                        $"Rumor {record.Id} ignorado " +
+                        $"durante o sorteio: {targetError}"
+                    );
+
+                    continue;
+                }
+
+                bool waypointsAdded =
+                    RumorWaypointService.TryAddWaypoints(
+                        api,
+                        player,
+                        record,
+                        knowledge,
+                        resolution,
+                        api.World.Rand,
+                        out IReadOnlyList<Vec3d> waypointPositions,
+                        out string waypointError
+                    );
+
+                if (!waypointsAdded)
+                {
+                    error = waypointError;
+                    return false;
+                }
+
+                bool committed =
+                    rumorRegistry.TryMarkSold(
+                        record.Id,
+                        knowledge
+                    );
+
+                if (!committed)
+                {
+                    logger.Error(
+                        $"Os waypoints do rumor {record.Id} " +
+                        "foram criados, mas o registro não pôde " +
+                        "ser marcado como vendido."
+                    );
+
+                    error =
+                        "As localizações foram adicionadas ao mapa, " +
+                        "mas o rumor não pôde ser registrado " +
+                        "como vendido.";
+
+                    return false;
+                }
+
+                LogDelivery(
                     record,
                     knowledge,
                     resolution,
-                    api.World.Rand,
-                    out IReadOnlyList<Vec3d> waypointPositions,
-                    out string waypointError
+                    waypointPositions
                 );
 
-            if (!waypointsAdded)
-            {
-                error = waypointError;
-                return false;
+                deliveredRecord = record;
+                return true;
             }
 
-            bool committed =
-                rumorRegistry.TryMarkSold(
-                    record.Id,
-                    knowledge
-                );
-
-            if (!committed)
-            {
-                logger.Error(
-                    $"Os waypoints do rumor {record.Id} " +
-                    "foram criados, mas o registro não pôde " +
-                    "ser marcado como vendido."
-                );
-
-                error =
-                    "As localizações foram adicionadas ao mapa, " +
-                    "mas o rumor não pôde ser registrado " +
-                    "como vendido.";
-
-                return false;
-            }
-
-            LogDelivery(
-                record,
-                knowledge,
-                resolution,
-                waypointPositions
+            error = CreateNoResolvableRumorError(
+                candidates.Count,
+                failures
             );
 
-            deliveredRecord = record;
-            return true;
+            logger.Notification(
+                "=== Rumor Network: nenhum candidato resolvível ==="
+            );
+
+            logger.Notification(error);
+            return false;
+        }
+
+        private static void IncrementFailure(
+            Dictionary<
+                RumorResolutionFailureKind,
+                int
+            > failures,
+            RumorResolutionFailureKind failure
+        )
+        {
+            if (!failures.TryGetValue(
+                    failure,
+                    out int count
+                ))
+            {
+                count = 0;
+            }
+
+            failures[failure] = count + 1;
+        }
+
+        private static int GetFailureCount(
+            Dictionary<
+                RumorResolutionFailureKind,
+                int
+            > failures,
+            RumorResolutionFailureKind failure
+        )
+        {
+            return failures.TryGetValue(
+                failure,
+                out int count
+            )
+                ? count
+                : 0;
+        }
+
+        private static string CreateNoResolvableRumorError(
+            int testedCount,
+            Dictionary<
+                RumorResolutionFailureKind,
+                int
+            > failures
+        )
+        {
+            int noOpenings = GetFailureCount(
+                failures,
+                RumorResolutionFailureKind.NoOpenings
+            );
+
+            int enclosed = GetFailureCount(
+                failures,
+                RumorResolutionFailureKind.Enclosed
+            );
+
+            int chunksUnavailable = GetFailureCount(
+                failures,
+                RumorResolutionFailureKind.ChunksUnavailable
+            );
+
+            int searchLimit = GetFailureCount(
+                failures,
+                RumorResolutionFailureKind.SearchLimitReached
+            );
+
+            int unknown = GetFailureCount(
+                failures,
+                RumorResolutionFailureKind.Unknown
+            );
+
+            return
+                "Nenhum rumor pôde ser resolvido agora. " +
+                $"Testados={testedCount} | " +
+                $"Sem abertura={noOpenings} | " +
+                $"Fechados={enclosed} | " +
+                $"Chunks indisponíveis={chunksUnavailable} | " +
+                $"Limite={searchLimit} | " +
+                $"Outros={unknown}.";
         }
 
         private void LogDelivery(

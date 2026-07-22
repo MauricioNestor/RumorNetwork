@@ -26,6 +26,7 @@ namespace RumorNetwork.Rumors
             bool resolved = TryResolveAll(
                 record,
                 out RumorTargetResolution? resolution,
+                out _,
                 out error
             );
 
@@ -36,6 +37,7 @@ namespace RumorNetwork.Rumors
         public bool TryResolveAll(
             RumorRecord record,
             out RumorTargetResolution? resolution,
+            out RumorResolutionFailureKind failure,
             out string error
         )
         {
@@ -44,6 +46,7 @@ namespace RumorNetwork.Rumors
                 return TryResolveUndergroundRuin(
                     record,
                     out resolution,
+                    out failure,
                     out error
                 );
             }
@@ -52,6 +55,7 @@ namespace RumorNetwork.Rumors
                 CreateCenterTarget(record)
             );
 
+            failure = RumorResolutionFailureKind.None;
             error = string.Empty;
             return true;
         }
@@ -59,6 +63,7 @@ namespace RumorNetwork.Rumors
         private bool TryResolveUndergroundRuin(
             RumorRecord record,
             out RumorTargetResolution? resolution,
+            out RumorResolutionFailureKind failure,
             out string error
         )
         {
@@ -79,8 +84,11 @@ namespace RumorNetwork.Rumors
             )
             {
                 resolution = null;
-                error = CreateSkyResolutionError(
+                failure = MapSkyFailure(
                     skyResult.Status
+                );
+                error = CreateSkyResolutionError(
+                    failure
                 );
                 return false;
             }
@@ -104,6 +112,7 @@ namespace RumorNetwork.Rumors
                 structureEntrance
             );
 
+            failure = RumorResolutionFailureKind.None;
             error = string.Empty;
             return true;
         }
@@ -135,22 +144,46 @@ namespace RumorNetwork.Rumors
             );
         }
 
-        private static string CreateSkyResolutionError(
-            CaveSkyConnectionStatus status
-        )
+        private static RumorResolutionFailureKind
+            MapSkyFailure(
+                CaveSkyConnectionStatus status
+            )
         {
             return status switch
             {
                 CaveSkyConnectionStatus.NoOpenings =>
-                    "A ruína subterrânea não possui uma abertura detectável.",
+                    RumorResolutionFailureKind.NoOpenings,
 
                 CaveSkyConnectionStatus.Enclosed =>
-                    "A ruína subterrânea não está conectada ao céu.",
-
-                CaveSkyConnectionStatus.SearchLimitReached =>
-                    "A busca pela entrada da caverna atingiu o limite de segurança.",
+                    RumorResolutionFailureKind.Enclosed,
 
                 CaveSkyConnectionStatus.ChunksUnavailable =>
+                    RumorResolutionFailureKind.ChunksUnavailable,
+
+                CaveSkyConnectionStatus.SearchLimitReached =>
+                    RumorResolutionFailureKind.SearchLimitReached,
+
+                _ =>
+                    RumorResolutionFailureKind.Unknown
+            };
+        }
+
+        private static string CreateSkyResolutionError(
+            RumorResolutionFailureKind failure
+        )
+        {
+            return failure switch
+            {
+                RumorResolutionFailureKind.NoOpenings =>
+                    "A ruína subterrânea não possui uma abertura detectável.",
+
+                RumorResolutionFailureKind.Enclosed =>
+                    "A ruína subterrânea não está conectada ao céu.",
+
+                RumorResolutionFailureKind.SearchLimitReached =>
+                    "A busca pela entrada da caverna atingiu o limite de segurança.",
+
+                RumorResolutionFailureKind.ChunksUnavailable =>
                     "A entrada da caverna atravessa chunks que não estão carregados.",
 
                 _ =>

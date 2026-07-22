@@ -101,10 +101,10 @@ public sealed class RumorRegistry
         }
     }
 
-    public bool TryPickRandomNotSold(
-         Random random,
-         out RumorRecord? record
-    )
+    public List<RumorRecord>
+        CreateShuffledNotSoldCandidates(
+            Random random
+        )
     {
         List<RumorRecord> candidates = new();
 
@@ -122,16 +122,45 @@ public sealed class RumorRegistry
             }
         }
 
+        for (
+            int index = candidates.Count - 1;
+            index > 0;
+            index--
+        )
+        {
+            int swapIndex =
+                random.Next(index + 1);
+
+            (
+                candidates[index],
+                candidates[swapIndex]
+            ) =
+            (
+                candidates[swapIndex],
+                candidates[index]
+            );
+        }
+
+        return candidates;
+    }
+
+    public bool TryPickRandomNotSold(
+         Random random,
+         out RumorRecord? record
+    )
+    {
+        List<RumorRecord> candidates =
+            CreateShuffledNotSoldCandidates(
+                random
+            );
+
         if (candidates.Count == 0)
         {
             record = null;
             return false;
         }
 
-        record = candidates[
-            random.Next(candidates.Count)
-        ];
-
+        record = candidates[0];
         return true;
     }
 
