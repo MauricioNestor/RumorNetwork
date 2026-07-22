@@ -29,5 +29,19 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
   </Content>
 </ItemGroup>
+	
+<ItemGroup>
+	<Reference Include="protobuf-net"
+				Condition="Exists('$(VINTAGE_STORY)\Lib\protobuf-net.dll')">
+		<HintPath>$(VINTAGE_STORY)\Lib\protobuf-net.dll</HintPath>
+		<Private>false</Private>
+	</Reference>
 
+	<Reference Include="protobuf-net.Core"
+				Condition="Exists('$(VINTAGE_STORY)\Lib\protobuf-net.Core.dll')">
+		<HintPath>$(VINTAGE_STORY)\Lib\protobuf-net.Core.dll</HintPath>
+		<Private>false</Private>
+	</Reference>
+</ItemGroup>
+	
 </Project>

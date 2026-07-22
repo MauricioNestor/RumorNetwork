@@ -10,10 +10,30 @@ namespace RumorNetwork
 {
     public class RumorNetworkModSystem : ModSystem
     {
+
         private readonly List<GeneratedStructure> lastInspection = new();
+        private int RegionSearchRadius { get; set; } = 1;
+
+        private int MaximumRegionCount =>
+            (RegionSearchRadius * 2 + 1) *
+            (RegionSearchRadius * 2 + 1);
+
+        private const string RumorRegistrySaveKey = "rumornetwork:registry-v1";
+
+        private readonly RumorRegistry rumorRegistry = new();
+
+        private ICoreServerAPI serverApi = null!;
 
         public override void StartServerSide(ICoreServerAPI api)
         {
+            serverApi = api;
+
+            api.Event.SaveGameLoaded +=
+                OnSaveGameLoaded;
+
+            api.Event.GameWorldSave +=
+                OnGameWorldSave;
+
             IChatCommand rumorCommand = api.ChatCommands
                 .Create("rumor")
                 .WithDescription("Comandos do Rumor Network.")
@@ -93,6 +113,29 @@ namespace RumorNetwork
                 .RequiresPlayer()
                 .RequiresPrivilege(Privilege.chat)
                 .HandleWith(args => ListRumorSites(api, args))
+                .EndSubCommand();
+
+            rumorCommand
+                .BeginSubCommand("index")
+                .WithDescription(
+                    "Adiciona ao registro persistente os locais " +
+                    "elegíveis das regiões carregadas."
+                )
+                .RequiresPlayer()
+                .RequiresPrivilege(Privilege.chat)
+                .HandleWith(args =>
+                    IndexRumorSites(api, args)
+                )
+                .EndSubCommand();
+
+            rumorCommand
+                .BeginSubCommand("registry")
+                .WithDescription(
+                    "Mostra o estado do registro persistente de rumores."
+                )
+                .RequiresPlayer()
+                .RequiresPrivilege(Privilege.chat)
+                .HandleWith(ShowRumorRegistry)
                 .EndSubCommand();
 
             Mod.Logger.Notification(
@@ -395,29 +438,31 @@ namespace RumorNetwork
             BlockPos playerPos =
                 args.Caller.Entity.Pos.AsBlockPos;
 
-            long regionIndex =
-                api.WorldManager.MapRegionIndex2DByBlockPos(
-                    playerPos.X,
-                    playerPos.Z
-                );
+            List<GeneratedStructure> structures =
+            MapRegionStructureCollector
+            .CollectLoadedNeighborhood(
+            api,
+            playerPos,
+            RegionSearchRadius,
+            out int loadedRegionCount
+            );
 
-            IMapRegion region =
-                api.WorldManager.GetMapRegion(regionIndex);
-
-            if (region == null)
+            if (loadedRegionCount == 0)
             {
                 return TextCommandResult.Error(
-                    "A região atual não está carregada."
+                    "Nenhuma map region carregada foi encontrada."
                 );
             }
 
             List<RumorSite> sites =
                 RumorSiteBuilder.Build(
-                    region.GeneratedStructures
+                    structures
                 );
 
             Mod.Logger.Notification(
-                "=== Rumor Network: locais vendáveis ==="
+                $"=== Rumor Network: locais vendáveis | " +
+                $"Regions={loadedRegionCount}/{MaximumRegionCount} | " +
+                $"Structures={structures.Count} ==="
             );
 
             for (int index = 0; index < sites.Count; index++)
@@ -439,8 +484,121 @@ namespace RumorNetwork
             }
 
             return TextCommandResult.Success(
-                $"{sites.Count} locais elegíveis encontrados. " +
+                $"{sites.Count} locais elegíveis encontrados em " +
+                $"{loadedRegionCount} de {MaximumRegionCount} regiões. " +
                 "Veja o console."
+            );
+        }
+
+        private void OnSaveGameLoaded()
+        {
+            RumorRegistrySaveData saveData =
+                serverApi.WorldManager.SaveGame.GetData(
+                    RumorRegistrySaveKey,
+                    new RumorRegistrySaveData()
+                );
+
+            rumorRegistry.Import(saveData);
+
+            Mod.Logger.Notification(
+                $"Rumor Network carregou " +
+                $"{rumorRegistry.Count} rumores persistidos."
+            );
+        }
+
+        private void OnGameWorldSave()
+        {
+            RumorRegistrySaveData saveData =
+                rumorRegistry.Export();
+
+            serverApi.WorldManager.SaveGame.StoreData(
+                RumorRegistrySaveKey,
+                saveData
+            );
+        }
+
+        private TextCommandResult IndexRumorSites(
+            ICoreServerAPI api,
+            TextCommandCallingArgs args
+        )
+        {
+            BlockPos playerPos =
+                args.Caller.Entity.Pos.AsBlockPos;
+
+            List<GeneratedStructure> structures =
+                MapRegionStructureCollector
+                    .CollectLoadedNeighborhood(
+                        api,
+                        playerPos,
+                        RegionSearchRadius,
+                        out int loadedRegionCount
+                    );
+
+            List<RumorSite> sites =
+                RumorSiteBuilder.Build(
+                    structures
+                );
+
+            int addedCount =
+                rumorRegistry.Merge(sites);
+
+            Mod.Logger.Notification(
+                $"=== Rumor Network: indexação | " +
+                $"Regions={loadedRegionCount}/" +
+                $"{MaximumRegionCount} | " +
+                $"Structures={structures.Count} | " +
+                $"Sites={sites.Count} | " +
+                $"Added={addedCount} | " +
+                $"Registry={rumorRegistry.Count} ==="
+            );
+
+            return TextCommandResult.Success(
+                $"{addedCount} novos locais adicionados. " +
+                $"Registro total: {rumorRegistry.Count}."
+            );
+        }
+
+        private TextCommandResult ShowRumorRegistry(
+            TextCommandCallingArgs args
+        )
+        {
+            int notSold =
+                rumorRegistry.CountByKnowledge(
+                    RumorKnowledgeLevel.NotSold
+                );
+
+            int approximate =
+                rumorRegistry.CountByKnowledge(
+                    RumorKnowledgeLevel.Approximate
+                );
+
+            int exact =
+                rumorRegistry.CountByKnowledge(
+                    RumorKnowledgeLevel.Exact
+                );
+
+            Mod.Logger.Notification(
+                "=== Rumor Network: registro persistente ==="
+            );
+
+            Mod.Logger.Notification(
+                $"Total: {rumorRegistry.Count}"
+            );
+
+            Mod.Logger.Notification(
+                $"NotSold: {notSold}"
+            );
+
+            Mod.Logger.Notification(
+                $"Approximate: {approximate}"
+            );
+
+            Mod.Logger.Notification(
+                $"Exact: {exact}"
+            );
+
+            return TextCommandResult.Success(
+                $"{rumorRegistry.Count} rumores registrados."
             );
         }
 
