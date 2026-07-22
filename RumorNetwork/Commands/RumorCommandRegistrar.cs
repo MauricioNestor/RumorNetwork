@@ -10,7 +10,7 @@ namespace RumorNetwork.Commands
             ICoreServerAPI api,
             ILogger logger,
             RumorRegistry rumorRegistry,
-            RumorTargetResolver rumorTargetResolver,
+            RumorDeliveryService rumorDeliveryService,
             int regionSearchRadius
         )
         {
@@ -40,9 +40,7 @@ namespace RumorNetwork.Commands
 
             new RumorDeliveryCommands(
                 api,
-                logger,
-                rumorRegistry,
-                rumorTargetResolver
+                rumorDeliveryService
             ).Register(rumorCommand);
         }
     }

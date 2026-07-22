@@ -17,6 +17,7 @@ namespace RumorNetwork
             rumorTargetResolver = new();
 
         private ICoreServerAPI serverApi = null!;
+        private RumorDeliveryService rumorDeliveryService = null!;
 
         private int RegionSearchRadius { get; set; } = 1;
 
@@ -25,6 +26,14 @@ namespace RumorNetwork
         )
         {
             serverApi = api;
+
+            rumorDeliveryService =
+                new RumorDeliveryService(
+                    api,
+                    Mod.Logger,
+                    rumorRegistry,
+                    rumorTargetResolver
+                );
 
             api.Event.SaveGameLoaded +=
                 OnSaveGameLoaded;
@@ -36,7 +45,7 @@ namespace RumorNetwork
                 api,
                 Mod.Logger,
                 rumorRegistry,
-                rumorTargetResolver,
+                rumorDeliveryService,
                 RegionSearchRadius
             );
 
