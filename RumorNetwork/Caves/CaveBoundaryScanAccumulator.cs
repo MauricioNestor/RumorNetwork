@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Vintagestory.API.MathTools;
 
 namespace RumorNetwork.Caves
 {
@@ -46,7 +47,9 @@ namespace RumorNetwork.Caves
             UnknownPairCount++;
         }
 
-        public CaveBoundaryScanResult BuildResult()
+        public CaveBoundaryScanResult BuildResult(
+            Cuboidi scannedBox
+        )
         {
             CaveBoundaryScanStatus status;
 
@@ -69,6 +72,7 @@ namespace RumorNetwork.Caves
 
             return new CaveBoundaryScanResult(
                 status,
+                scannedBox,
                 openings.AsReadOnly(),
                 ScannedPairCount,
                 UnknownPairCount,

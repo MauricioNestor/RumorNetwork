@@ -15,16 +15,16 @@ namespace RumorNetwork.Commands
         private const int OutsideOpeningSlot = 91704;
 
         private static readonly int BoundingBoxColor =
-            ColorUtil.ToRgba(220, 0, 220, 255);
+            ColorUtil.ToRgba(60, 0, 220, 255);
 
         private static readonly int CenterColor =
-            ColorUtil.ToRgba(255, 255, 220, 0);
+            ColorUtil.ToRgba(120, 255, 220, 0);
 
         private static readonly int InsideOpeningColor =
-            ColorUtil.ToRgba(190, 0, 255, 80);
+            ColorUtil.ToRgba(90, 0, 255, 80);
 
         private static readonly int OutsideOpeningColor =
-            ColorUtil.ToRgba(190, 80, 140, 255);
+            ColorUtil.ToRgba(90, 80, 140, 255);
 
         private readonly ICoreServerAPI api;
 
@@ -43,8 +43,8 @@ namespace RumorNetwork.Commands
         {
             Clear(player);
 
-            Cuboidi box = structure.Location;
-            Vec3i center = box.Center;
+            Cuboidi box = boundaryResult.ScannedBox;
+            Vec3i center = structure.Location.Center;
 
             Highlight(
                 player,

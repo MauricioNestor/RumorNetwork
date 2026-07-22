@@ -1,3 +1,4 @@
+using System;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.GameContent;
@@ -47,9 +48,17 @@ namespace RumorNetwork.Caves
                 return CaveTraversalKind.Open;
             }
 
-            return HasFullBlockCollision(collisionBoxes)
-                ? CaveTraversalKind.Blocked
-                : CaveTraversalKind.Unknown;
+            if (HasFullBlockCollision(collisionBoxes))
+            {
+                return CaveTraversalKind.Blocked;
+            }
+
+            if (IsChiseledBlock(block))
+            {
+                return CaveTraversalKind.Partial;
+            }
+
+            return CaveTraversalKind.Unknown;
         }
 
         private CaveTraversalKind ClassifyDoor(
@@ -73,6 +82,17 @@ namespace RumorNetwork.Caves
             return isBarLocked
                 ? CaveTraversalKind.Blocked
                 : CaveTraversalKind.Openable;
+        }
+
+        private static bool IsChiseledBlock(
+            Block block
+        )
+        {
+            return string.Equals(
+                block.Code?.Path,
+                "chiseledblock",
+                StringComparison.OrdinalIgnoreCase
+            );
         }
 
         private static bool HasFullBlockCollision(

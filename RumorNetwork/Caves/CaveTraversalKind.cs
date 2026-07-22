@@ -4,6 +4,7 @@ namespace RumorNetwork.Caves
     {
         Open,
         Openable,
+        Partial,
         Blocked,
         Unknown
     }

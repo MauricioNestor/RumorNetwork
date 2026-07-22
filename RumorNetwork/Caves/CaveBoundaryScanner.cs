@@ -20,18 +20,23 @@ namespace RumorNetwork.Caves
         }
 
         public CaveBoundaryScanResult Scan(
-            Cuboidi box
+            Cuboidi structureBox
         )
         {
+            Cuboidi scannedBox =
+                CreateEffectiveBoundaryBox(
+                    structureBox
+                );
+
             if (
-                box.SizeX <= 0 ||
-                box.SizeY <= 0 ||
-                box.SizeZ <= 0
+                scannedBox.SizeX <= 0 ||
+                scannedBox.SizeY <= 0 ||
+                scannedBox.SizeZ <= 0
             )
             {
                 throw new ArgumentException(
-                    "A bounding box precisa ter volume positivo.",
-                    nameof(box)
+                    "A bounding box efetiva precisa ter volume positivo.",
+                    nameof(structureBox)
                 );
             }
 
@@ -43,13 +48,29 @@ namespace RumorNetwork.Caves
             )
             {
                 faceScanner.Scan(
-                    box,
+                    scannedBox,
                     face,
                     accumulator
                 );
             }
 
-            return accumulator.BuildResult();
+            return accumulator.BuildResult(
+                scannedBox
+            );
+        }
+
+        private static Cuboidi CreateEffectiveBoundaryBox(
+            Cuboidi structureBox
+        )
+        {
+            return new Cuboidi(
+                structureBox.MinX,
+                structureBox.MinY,
+                structureBox.MinZ,
+                structureBox.MaxX - 1,
+                structureBox.MaxY - 1,
+                structureBox.MaxZ - 1
+            );
         }
     }
 }

@@ -17,6 +17,13 @@ namespace RumorNetwork.Commands
                 "=== Rumor Network: cave boundary scan ==="
             );
 
+            Cuboidi box = result.ScannedBox;
+
+            logger.Notification(
+                $"ScannedBox=({box.X1},{box.Y1},{box.Z1})-" +
+                $"({box.X2},{box.Y2},{box.Z2})"
+            );
+
             logger.Notification(
                 $"Status={result.Status} | " +
                 $"Pairs={result.ScannedPairCount} | " +
