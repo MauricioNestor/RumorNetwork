@@ -38,6 +38,14 @@ public static class RumorSiteBuilder
         ISet<string> knownIds
     )
     {
+        const StructureKind kind =
+            StructureKind.RuinedVillage;
+
+        if (!RumorEligibilityPolicy.IsEligible(kind))
+        {
+            return;
+        }
+
         List<GroupedStructure> villages =
             StructureGrouper.GroupVillageParts(
                 structures
@@ -48,7 +56,7 @@ public static class RumorSiteBuilder
             Cuboidi location = village.Location;
 
             string id = CreateId(
-                StructureKind.RuinedVillage,
+                kind,
                 village.Family,
                 location
             );
@@ -61,7 +69,7 @@ public static class RumorSiteBuilder
             sites.Add(
                 new RumorSite(
                     id,
-                    StructureKind.RuinedVillage,
+                    kind,
                     village.Family,
                     village.Family,
                     location,
