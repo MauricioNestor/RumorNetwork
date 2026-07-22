@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using RumorNetwork.Structures;
 using Vintagestory.API.Common;
@@ -16,24 +17,22 @@ namespace RumorNetwork.Rumors
         private const double ApproximateMaximumOffset =
             384;
 
-        public static bool TryAddWaypoint(
+        private const string WaypointColor =
+            "#E6B43C";
+
+        public static bool TryAddWaypoints(
             ICoreServerAPI api,
             IServerPlayer player,
             RumorRecord record,
             RumorKnowledgeLevel knowledge,
-            RumorTarget target,
+            RumorTargetResolution resolution,
             Random random,
-            out Vec3d waypointPosition,
+            out IReadOnlyList<Vec3d> waypointPositions,
             out string error
         )
         {
-            waypointPosition =
-                CreateWaypointPosition(
-                    target.Position,
-                    knowledge,
-                    random
-                );
-
+            List<Vec3d> addedPositions = new();
+            waypointPositions = addedPositions.AsReadOnly();
             error = string.Empty;
 
             if (
@@ -67,32 +66,74 @@ namespace RumorNetwork.Rumors
                 return false;
             }
 
-            Waypoint waypoint = new()
-            {
-                Color =
-                    ColorUtil.Hex2Int("#E6B43C"),
-
-                Icon = "circle",
-                Pinned = true,
-                Position = waypointPosition,
-                OwningPlayerUid =
-                    player.PlayerUID,
-
-                Title = CreateTitle(
-                    record,
+            IReadOnlyList<RumorTarget> targets =
+                SelectTargets(
+                    resolution,
                     knowledge
-                ),
+                );
 
-                Guid =
-                    Guid.NewGuid().ToString()
-            };
+            foreach (RumorTarget target in targets)
+            {
+                Vec3d waypointPosition =
+                    CreateWaypointPosition(
+                        target.Position,
+                        knowledge,
+                        random
+                    );
 
-            waypointLayer.AddWaypoint(
-                waypoint,
-                player
-            );
+                Waypoint waypoint = new()
+                {
+                    Color =
+                        ColorUtil.Hex2Int(WaypointColor),
 
+                    Icon = CreateIcon(target.Kind),
+                    Pinned = true,
+                    Position = waypointPosition,
+                    OwningPlayerUid =
+                        player.PlayerUID,
+
+                    Title = CreateTitle(
+                        record,
+                        knowledge,
+                        target.Kind
+                    ),
+
+                    Guid =
+                        Guid.NewGuid().ToString()
+                };
+
+                waypointLayer.AddWaypoint(
+                    waypoint,
+                    player
+                );
+
+                addedPositions.Add(
+                    waypointPosition
+                );
+            }
+
+            waypointPositions = addedPositions.AsReadOnly();
             return true;
+        }
+
+        private static IReadOnlyList<RumorTarget>
+            SelectTargets(
+                RumorTargetResolution resolution,
+                RumorKnowledgeLevel knowledge
+            )
+        {
+            if (
+                knowledge
+                == RumorKnowledgeLevel.Approximate
+            )
+            {
+                return new[]
+                {
+                    resolution.PrimaryTarget
+                };
+            }
+
+            return resolution.Targets;
         }
 
         private static Vec3d
@@ -135,38 +176,39 @@ namespace RumorNetwork.Rumors
             return position;
         }
 
-        private static string CreateTitle(
-            RumorRecord record,
-            RumorKnowledgeLevel knowledge
+        private static string CreateIcon(
+            RumorTargetKind targetKind
         )
         {
-            string locationName =
-                record.Kind switch
-                {
-                    StructureKind.Trader =>
-                        "comerciante",
+            return targetKind switch
+            {
+                RumorTargetKind.CaveEntrance =>
+                    "cave",
 
-                    StructureKind.Vug =>
-                        record.Family,
+                RumorTargetKind.StructureEntrance =>
+                    "ruins",
 
-                    StructureKind.RuinedVillage =>
-                        "vila em ruínas",
+                _ =>
+                    "circle"
+            };
+        }
 
-                    StructureKind.SurfaceRuin =>
-                        "ruínas na superfície",
+        private static string CreateTitle(
+            RumorRecord record,
+            RumorKnowledgeLevel knowledge,
+            RumorTargetKind targetKind
+        )
+        {
+            string locationName = targetKind switch
+            {
+                RumorTargetKind.CaveEntrance =>
+                    "entrada da caverna",
 
-                    StructureKind.UndergroundRuin =>
-                        "ruínas subterrâneas",
+                RumorTargetKind.StructureEntrance =>
+                    "ruínas subterrâneas",
 
-                    StructureKind.BetterRuin =>
-                        "ruínas antigas",
-
-                    StructureKind.Translocator =>
-                        "translocador",
-
-                    _ =>
-                        record.Kind.ToString()
-                };
+                _ => CreateLocationName(record)
+            };
 
             string precision =
                 knowledge
@@ -177,6 +219,38 @@ namespace RumorNetwork.Rumors
             return
                 $"Rumor: {locationName} — " +
                 precision;
+        }
+
+        private static string CreateLocationName(
+            RumorRecord record
+        )
+        {
+            return record.Kind switch
+            {
+                StructureKind.Trader =>
+                    "comerciante",
+
+                StructureKind.Vug =>
+                    record.Family,
+
+                StructureKind.RuinedVillage =>
+                    "vila em ruínas",
+
+                StructureKind.SurfaceRuin =>
+                    "ruínas na superfície",
+
+                StructureKind.UndergroundRuin =>
+                    "ruínas subterrâneas",
+
+                StructureKind.BetterRuin =>
+                    "ruínas antigas",
+
+                StructureKind.Translocator =>
+                    "translocador",
+
+                _ =>
+                    record.Kind.ToString()
+            };
         }
     }
 }
