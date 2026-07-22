@@ -3,6 +3,7 @@
     public enum RumorTargetKind
     {
         StructureCenter,
+        StructureEntrance,
         CaveEntrance
     }
 }
