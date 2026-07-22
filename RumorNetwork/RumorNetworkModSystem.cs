@@ -45,6 +45,7 @@ namespace RumorNetwork
                 api,
                 Mod.Logger,
                 rumorRegistry,
+                rumorTargetResolver,
                 rumorDeliveryService,
                 RegionSearchRadius
             );
