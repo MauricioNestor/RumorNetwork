@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using RumorNetwork.Catalog;
 using RumorNetwork.Configuration;
 using RumorNetwork.Purchases;
 using RumorNetwork.Rumors;
@@ -18,6 +19,8 @@ namespace RumorNetwork.Traders
         private readonly RumorInventoryPaymentService paymentService;
         private readonly TraderKnowledgeRegistry knowledgeRegistry;
         private readonly TraderLocationSelector selector;
+        private readonly SelectiveStructureCatalogService
+            catalogService;
 
         public TraderLocationPurchaseService(
             ICoreServerAPI api,
@@ -27,7 +30,8 @@ namespace RumorNetwork.Traders
             RumorPriceResolver priceResolver,
             RumorInventoryPaymentService paymentService,
             TraderKnowledgeRegistry knowledgeRegistry,
-            TraderLocationSelector selector
+            TraderLocationSelector selector,
+            SelectiveStructureCatalogService catalogService
         )
         {
             this.api = api;
@@ -38,6 +42,7 @@ namespace RumorNetwork.Traders
             this.paymentService = paymentService;
             this.knowledgeRegistry = knowledgeRegistry;
             this.selector = selector;
+            this.catalogService = catalogService;
         }
 
         public bool TryPurchase(
@@ -75,14 +80,27 @@ namespace RumorNetwork.Traders
 
             if (!sellerFound || seller == null)
             {
+                catalogService.RequestBackfillAround(
+                    (int)player.Entity.Pos.X,
+                    (int)player.Entity.Pos.Z
+                );
+
                 error =
                     "Nenhum comerciante indexado foi encontrado " +
                     $"a até {config.TraderLocations.SellerMatchRadius:0} " +
-                    "blocos. Aproxime-se do comerciante e execute " +
-                    "/rumor index antes de testar a compra.";
+                    "blocos. O catálogo automático foi acionado; " +
+                    "aguarde alguns segundos e tente novamente.";
 
                 return false;
             }
+
+            Vec3i sellerCenter =
+                seller.CreateLocation().Center;
+
+            catalogService.RequestBackfillAround(
+                sellerCenter.X,
+                sellerCenter.Z
+            );
 
             PlayerTraderKnowledge knowledge =
                 knowledgeRegistry.GetOrCreate(
@@ -131,14 +149,21 @@ namespace RumorNetwork.Traders
                         knowledge
                     );
 
-                error =
-                    "Não há outro comerciante indexado que " +
-                    "você ainda não conheça. " +
-                    $"Indexados={indexedTraderCount} | " +
-                    $"Conhecidos={knownTraderCount}. " +
-                    "Novos comerciantes entram no catálogo " +
-                    "quando /rumor index é executado em " +
-                    "regiões carregadas.";
+                error = catalogService.IsWorking
+                    ? "O catálogo está verificando regiões já " +
+                        "geradas para encontrar outros " +
+                        "comerciantes. " +
+                        $"Indexados={indexedTraderCount} | " +
+                        $"Conhecidos={knownTraderCount} | " +
+                        $"Pendentes=" +
+                        $"{catalogService.PendingRegionCount}. " +
+                        "Tente novamente em alguns segundos."
+                    : "Não há outro comerciante catalogado que " +
+                        "você ainda não conheça. " +
+                        $"Indexados={indexedTraderCount} | " +
+                        $"Conhecidos={knownTraderCount}. " +
+                        "Áreas nunca geradas ainda não contêm " +
+                        "comerciantes para catalogar.";
 
                 return false;
             }
