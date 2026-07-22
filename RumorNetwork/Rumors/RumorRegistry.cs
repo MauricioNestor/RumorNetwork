@@ -100,4 +100,65 @@ public sealed class RumorRegistry
             records[record.Id] = record;
         }
     }
+
+    public bool TryPickRandomNotSold(
+         Random random,
+         out RumorRecord? record
+    )
+    {
+        List<RumorRecord> candidates = new();
+
+        foreach (RumorRecord candidate in records.Values)
+        {
+            if (
+                candidate.Knowledge
+                == RumorKnowledgeLevel.NotSold
+            )
+            {
+                candidates.Add(candidate);
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            record = null;
+            return false;
+        }
+
+        record = candidates[
+            random.Next(candidates.Count)
+        ];
+
+        return true;
+    }
+
+    public bool TryMarkSold(
+        string id,
+        RumorKnowledgeLevel knowledge
+    )
+    {
+        if (knowledge == RumorKnowledgeLevel.NotSold)
+        {
+            return false;
+        }
+
+        if (!records.TryGetValue(
+                id,
+                out RumorRecord? record
+            ))
+        {
+            return false;
+        }
+
+        if (
+            record.Knowledge
+            != RumorKnowledgeLevel.NotSold
+        )
+        {
+            return false;
+        }
+
+        record.Knowledge = knowledge;
+        return true;
+    }
 }

@@ -125,7 +125,6 @@ public static class RumorSiteBuilder
             StructureKind.UndergroundRuin or
             StructureKind.BetterRuin or
             StructureKind.SurfaceRuin or
-            StructureKind.Vug or
             StructureKind.Translocator;
     }
 

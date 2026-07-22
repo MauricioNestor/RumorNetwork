@@ -24,6 +24,8 @@ namespace RumorNetwork
 
         private ICoreServerAPI serverApi = null!;
 
+        private readonly RumorTargetResolver rumorTargetResolver = new();
+
         public override void StartServerSide(ICoreServerAPI api)
         {
             serverApi = api;
@@ -136,6 +138,21 @@ namespace RumorNetwork
                 .RequiresPlayer()
                 .RequiresPrivilege(Privilege.chat)
                 .HandleWith(ShowRumorRegistry)
+                .EndSubCommand();
+
+            rumorCommand
+                .BeginSubCommand("draw")
+                .WithDescription(
+                    "Sorteia um rumor ainda não vendido."
+                )
+                .RequiresPlayer()
+                .RequiresPrivilege(Privilege.chat)
+                .WithArgs(
+                    api.ChatCommands.Parsers.Word("knowledge")
+                )
+                .HandleWith(args =>
+                    DrawRumor(api, args)
+                )
                 .EndSubCommand();
 
             Mod.Logger.Notification(
@@ -602,5 +619,190 @@ namespace RumorNetwork
             );
         }
 
+        private TextCommandResult DrawRumor(
+            ICoreServerAPI api,
+            TextCommandCallingArgs args
+        )
+        {
+            string requestedKnowledge =
+                ((string)args[0]).Trim();
+
+            if (!TryParseKnowledgeLevel(
+                    requestedKnowledge,
+                    out RumorKnowledgeLevel knowledge
+                ))
+            {
+                return TextCommandResult.Error(
+                    "Tipo inválido. " +
+                    "Use approximate ou exact."
+                );
+            }
+
+            IServerPlayer? player =
+                args.Caller.Player as IServerPlayer;
+
+            if (player == null)
+            {
+                return TextCommandResult.Error(
+                    "O comando precisa ser " +
+                    "executado por um jogador."
+                );
+            }
+
+            bool selected =
+                rumorRegistry.TryPickRandomNotSold(
+                    api.World.Rand,
+                    out RumorRecord? record
+                );
+
+            if (!selected || record == null)
+            {
+                return TextCommandResult.Error(
+                    "Não existem rumores " +
+                    "ainda não vendidos."
+                );
+            }
+
+            bool targetResolved =
+                rumorTargetResolver.TryResolve(
+                    record,
+                    out RumorTarget? target,
+                    out string targetError
+                );
+
+            if (
+                !targetResolved ||
+                target == null
+            )
+            {
+                return TextCommandResult.Error(
+                    targetError
+                );
+            }
+
+            bool waypointAdded =
+                RumorWaypointService.TryAddWaypoint(
+                    api,
+                    player,
+                    record,
+                    knowledge,
+                    target,
+                    api.World.Rand,
+                    out Vec3d waypointPosition,
+                    out string waypointError
+                );
+
+            if (!waypointAdded)
+            {
+                return TextCommandResult.Error(
+                    waypointError
+                );
+            }
+
+            bool committed =
+                rumorRegistry.TryMarkSold(
+                    record.Id,
+                    knowledge
+                );
+
+            if (!committed)
+            {
+                Mod.Logger.Error(
+                    $"O waypoint do rumor {record.Id} " +
+                    "foi criado, mas o registro não pôde " +
+                    "ser marcado como vendido."
+                );
+
+                return TextCommandResult.Error(
+                    "A localização foi adicionada ao mapa, " +
+                    "mas o rumor não pôde ser registrado " +
+                    "como vendido."
+                );
+            }
+
+            Cuboidi box =
+                record.CreateLocation();
+
+            Vec3i center =
+                box.Center;
+
+            Mod.Logger.Notification(
+                "=== Rumor Network: rumor sorteado ==="
+            );
+
+            Mod.Logger.Notification(
+                $"Id={record.Id}"
+            );
+
+            Mod.Logger.Notification(
+                $"Knowledge={knowledge} | " +
+                $"Kind={record.Kind} | " +
+                $"Family={record.Family} | " +
+                $"Parts={record.PartCount}"
+            );
+
+            Mod.Logger.Notification(
+                $"TrueCenter=(" +
+                $"{center.X}; " +
+                $"{center.Y}; " +
+                $"{center.Z}) | " +
+                $"Box=({box.X1},{box.Y1},{box.Z1})-" +
+                $"({box.X2},{box.Y2},{box.Z2})"
+            );
+
+            Mod.Logger.Notification(
+                $"ResolvedTarget=(" +
+                $"{target.Position.X:0.0}; " +
+                $"{target.Position.Y:0.0}; " +
+                $"{target.Position.Z:0.0}) | " +
+                $"TargetKind={target.Kind}"
+            );
+
+            Mod.Logger.Notification(
+                $"Waypoint=(" +
+                $"{waypointPosition.X:0.0}; " +
+                $"{waypointPosition.Y:0.0}; " +
+                $"{waypointPosition.Z:0.0})"
+            );
+
+            string precisionText =
+                knowledge
+                == RumorKnowledgeLevel.Approximate
+                    ? "aproximada"
+                    : "exata";
+
+            return TextCommandResult.Success(
+                $"Rumor sorteado: {record.Kind}. " +
+                $"Localização {precisionText} " +
+                "adicionada ao mapa."
+            );
+        }
+        private static bool TryParseKnowledgeLevel(
+            string value,
+            out RumorKnowledgeLevel knowledge
+        )
+        {
+            switch (value.ToLowerInvariant())
+            {
+                case "approximate":
+                case "approx":
+                    knowledge =
+                        RumorKnowledgeLevel.Approximate;
+
+                    return true;
+
+                case "exact":
+                    knowledge =
+                        RumorKnowledgeLevel.Exact;
+
+                    return true;
+
+                default:
+                    knowledge =
+                        RumorKnowledgeLevel.NotSold;
+
+                    return false;
+            }
+        }
     }
 }
