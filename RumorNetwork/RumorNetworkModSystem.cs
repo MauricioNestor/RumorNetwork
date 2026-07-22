@@ -136,6 +136,7 @@ namespace RumorNetwork
                 rumorPurchaseService,
                 rumorOfferService,
                 traderLocationPurchaseService,
+                traderKnowledgeRegistry,
                 caveCellClassifier,
                 caveBoundaryScanner,
                 caveSkyConnectionSearch,
