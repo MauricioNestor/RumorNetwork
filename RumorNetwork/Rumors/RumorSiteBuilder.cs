@@ -82,7 +82,7 @@ public static class RumorSiteBuilder
             StructureKind kind =
                 StructureClassifier.Classify(structure);
 
-            if (!IsSellableSingleStructure(kind))
+            if (!RumorEligibilityPolicy.IsEligible(kind))
             {
                 continue;
             }
@@ -114,18 +114,6 @@ public static class RumorSiteBuilder
                 )
             );
         }
-    }
-
-    private static bool IsSellableSingleStructure(
-        StructureKind kind
-    )
-    {
-        return kind is
-            StructureKind.Trader or
-            StructureKind.UndergroundRuin or
-            StructureKind.BetterRuin or
-            StructureKind.SurfaceRuin or
-            StructureKind.Translocator;
     }
 
     private static string CreateId(
