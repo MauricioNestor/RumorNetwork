@@ -13,11 +13,33 @@ namespace RumorNetwork.Traders
             visitedTraderIds =
                 new(StringComparer.Ordinal);
 
+        private readonly Dictionary<string, int>
+            purchasesBySeller =
+                new(StringComparer.Ordinal);
+
         public int RevealedCount =>
             revealedTraderIds.Count;
 
         public int VisitedCount =>
             visitedTraderIds.Count;
+
+        public int TotalTraderLocationPurchases
+        {
+            get
+            {
+                int total = 0;
+
+                foreach (
+                    int purchaseCount
+                    in purchasesBySeller.Values
+                )
+                {
+                    total += purchaseCount;
+                }
+
+                return total;
+            }
+        }
 
         public bool IsKnown(
             string traderId
@@ -53,11 +75,46 @@ namespace RumorNetwork.Traders
             return removedRevealed || addedVisited;
         }
 
+        public int GetPurchasesFromSeller(
+            string sellerTraderId
+        )
+        {
+            return purchasesBySeller.TryGetValue(
+                sellerTraderId,
+                out int purchaseCount
+            )
+                ? purchaseCount
+                : 0;
+        }
+
+        public bool CanPurchaseFromSeller(
+            string sellerTraderId,
+            int maximumPurchases
+        )
+        {
+            return
+                GetPurchasesFromSeller(sellerTraderId) <
+                maximumPurchases;
+        }
+
+        public int RecordPurchaseFromSeller(
+            string sellerTraderId
+        )
+        {
+            int purchaseCount =
+                GetPurchasesFromSeller(sellerTraderId) + 1;
+
+            purchasesBySeller[sellerTraderId] =
+                purchaseCount;
+
+            return purchaseCount;
+        }
+
         public PlayerTraderKnowledgeRecord Export(
             string playerUid
         )
         {
-            return new PlayerTraderKnowledgeRecord
+            PlayerTraderKnowledgeRecord record = new()
             {
                 PlayerUid = playerUid,
                 RevealedTraderIds =
@@ -69,6 +126,22 @@ namespace RumorNetwork.Traders
                         visitedTraderIds
                     )
             };
+
+            foreach (
+                KeyValuePair<string, int> pair
+                in purchasesBySeller
+            )
+            {
+                record.SellerPurchases.Add(
+                    new TraderSellerPurchaseRecord
+                    {
+                        SellerTraderId = pair.Key,
+                        PurchaseCount = pair.Value
+                    }
+                );
+            }
+
+            return record;
         }
 
         public static PlayerTraderKnowledge Import(
@@ -112,6 +185,29 @@ namespace RumorNetwork.Traders
                     knowledge.visitedTraderIds.Add(
                         traderId
                     );
+                }
+            }
+
+            if (record.SellerPurchases != null)
+            {
+                foreach (
+                    TraderSellerPurchaseRecord purchase
+                    in record.SellerPurchases
+                )
+                {
+                    if (
+                        string.IsNullOrWhiteSpace(
+                            purchase.SellerTraderId
+                        ) ||
+                        purchase.PurchaseCount <= 0
+                    )
+                    {
+                        continue;
+                    }
+
+                    knowledge.purchasesBySeller[
+                        purchase.SellerTraderId
+                    ] = purchase.PurchaseCount;
                 }
             }
 
