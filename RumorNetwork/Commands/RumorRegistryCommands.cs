@@ -81,6 +81,11 @@ namespace RumorNetwork.Commands
             int addedCount =
                 rumorRegistry.Merge(sites);
 
+            int traderCount =
+                rumorRegistry.CountByKind(
+                    StructureKind.Trader
+                );
+
             logger.Notification(
                 $"=== Rumor Network: indexação | " +
                 $"Regions={loadedRegionCount}/" +
@@ -88,12 +93,14 @@ namespace RumorNetwork.Commands
                 $"Structures={structures.Count} | " +
                 $"Sites={sites.Count} | " +
                 $"Added={addedCount} | " +
-                $"Registry={rumorRegistry.Count} ==="
+                $"Registry={rumorRegistry.Count} | " +
+                $"Traders={traderCount} ==="
             );
 
             return TextCommandResult.Success(
                 $"{addedCount} novos locais adicionados. " +
-                $"Registro total: {rumorRegistry.Count}."
+                $"Registro total: {rumorRegistry.Count}. " +
+                $"Traders indexados: {traderCount}."
             );
         }
 
@@ -116,12 +123,21 @@ namespace RumorNetwork.Commands
                     RumorKnowledgeLevel.Exact
                 );
 
+            int traders =
+                rumorRegistry.CountByKind(
+                    StructureKind.Trader
+                );
+
             logger.Notification(
                 "=== Rumor Network: registro persistente ==="
             );
 
             logger.Notification(
                 $"Total: {rumorRegistry.Count}"
+            );
+
+            logger.Notification(
+                $"Traders: {traders}"
             );
 
             logger.Notification(
@@ -137,7 +153,8 @@ namespace RumorNetwork.Commands
             );
 
             return TextCommandResult.Success(
-                $"{rumorRegistry.Count} rumores registrados."
+                $"{rumorRegistry.Count} rumores registrados. " +
+                $"Traders indexados: {traders}."
             );
         }
     }
