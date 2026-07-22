@@ -1,3 +1,4 @@
+using RumorNetwork.Caves;
 using RumorNetwork.Commands;
 using RumorNetwork.Rumors;
 using Vintagestory.API.Common;
@@ -18,6 +19,7 @@ namespace RumorNetwork
 
         private ICoreServerAPI serverApi = null!;
         private RumorDeliveryService rumorDeliveryService = null!;
+        private CaveCellClassifier caveCellClassifier = null!;
 
         private int RegionSearchRadius { get; set; } = 1;
 
@@ -35,6 +37,11 @@ namespace RumorNetwork
                     rumorTargetResolver
                 );
 
+            caveCellClassifier =
+                new CaveCellClassifier(
+                    api.World.BlockAccessor
+                );
+
             api.Event.SaveGameLoaded +=
                 OnSaveGameLoaded;
 
@@ -47,6 +54,7 @@ namespace RumorNetwork
                 rumorRegistry,
                 rumorTargetResolver,
                 rumorDeliveryService,
+                caveCellClassifier,
                 RegionSearchRadius
             );
 
