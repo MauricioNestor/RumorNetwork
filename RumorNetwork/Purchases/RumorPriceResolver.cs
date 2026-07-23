@@ -58,6 +58,30 @@ namespace RumorNetwork.Purchases
             );
         }
 
+        public bool TryResolveBetterRuins(
+            out RumorPrice? price,
+            out string error
+        )
+        {
+            if (
+                !config.BetterRuins.Enabled ||
+                !RumorRuntimeSettings.BetterRuinsInstalled
+            )
+            {
+                price = null;
+                error =
+                    "Rumores dedicados do BetterRuins estão " +
+                    "indisponíveis.";
+                return false;
+            }
+
+            return TryResolveConfig(
+                config.BetterRuins.ExactPrice,
+                out price,
+                out error
+            );
+        }
+
         public bool HasStructureSpecificPrice(
             RumorKnowledgeLevel knowledge
         )
