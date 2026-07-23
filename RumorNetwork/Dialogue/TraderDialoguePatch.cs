@@ -17,12 +17,6 @@ namespace RumorNetwork.Dialogue
         private const string HarmonyId =
             "rumornetwork.trader-dialogue";
 
-        private static readonly FieldInfo? DialogueField =
-            AccessTools.Field(
-                typeof(DialogueController),
-                "dialogue"
-            );
-
         private Harmony? harmony;
 
         public override double ExecuteOrder()
@@ -34,31 +28,41 @@ namespace RumorNetwork.Dialogue
         {
             harmony = new Harmony(HarmonyId);
 
-            MethodInfo? getController = AccessTools.Method(
-                typeof(EntityBehaviorConversable),
-                nameof(EntityBehaviorConversable.GetOrCreateController)
-            );
+            MethodInfo? loadDialogue =
+                AccessTools.DeclaredMethod(
+                    typeof(EntityBehaviorConversable),
+                    "loadDialogue",
+                    new[]
+                    {
+                        typeof(AssetLocation),
+                        typeof(EntityPlayer)
+                    }
+                );
 
-            MethodInfo? receiveServerPacket = AccessTools.Method(
-                typeof(EntityBehaviorConversable),
-                nameof(EntityBehaviorConversable.OnReceivedServerPacket)
-            );
+            MethodInfo? receiveServerPacket =
+                AccessTools.Method(
+                    typeof(EntityBehaviorConversable),
+                    nameof(
+                        EntityBehaviorConversable
+                            .OnReceivedServerPacket
+                    )
+                );
 
-            if (getController == null)
+            if (loadDialogue == null)
             {
                 api.Logger.Error(
                     "Rumor Network não encontrou " +
-                    "EntityBehaviorConversable.GetOrCreateController; " +
+                    "EntityBehaviorConversable.loadDialogue; " +
                     "o diálogo de rumores não será injetado."
                 );
             }
             else
             {
                 harmony.Patch(
-                    getController,
+                    loadDialogue,
                     postfix: new HarmonyMethod(
                         typeof(TraderDialoguePatch),
-                        nameof(OnControllerCreated)
+                        nameof(InjectRumorDialogue)
                     )
                 );
             }
@@ -94,43 +98,33 @@ namespace RumorNetwork.Dialogue
             base.Dispose();
         }
 
-        private static void OnControllerCreated(
+        private static void InjectRumorDialogue(
             EntityBehaviorConversable __instance,
-            DialogueController __result
+            AssetLocation loc,
+            ref DialogueConfig __result
         )
         {
-            if (
-                __result == null ||
-                __result.NPCEntity is not EntityTrader ||
-                DialogueField == null
-            )
+            if (__result?.components == null)
             {
                 return;
             }
 
-            DialogueComponent[]? existing =
-                DialogueField.GetValue(__result)
-                    as DialogueComponent[];
+            DialogueComponent[] existing =
+                __result.components;
 
-            if (
-                existing == null ||
-                existing.Any(component =>
+            if (existing.Any(component =>
                     component.Code ==
                     "rumornetwork-root-traders"
-                )
-            )
+                ))
             {
                 return;
             }
 
-            DlgTalkComponent? root = FindRoot(existing);
+            DlgTalkComponent? root =
+                FindTradingRoot(existing);
+
             if (root == null)
             {
-                __result.NPCEntity.Api.Logger.Warning(
-                    "Rumor Network não encontrou o menu principal " +
-                    $"do diálogo de {__result.NPCEntity.Code}."
-                );
-
                 return;
             }
 
@@ -170,59 +164,45 @@ namespace RumorNetwork.Dialogue
 
             List<DialogueComponent> additions = new();
 
-            additions.AddRange(CreateTraderBranch(
-                root.Code,
-                ref nextId
-            ));
+            additions.AddRange(
+                CreateTraderBranch(root.Code)
+            );
 
-            additions.AddRange(CreateRumorBranch(
-                root.Code,
-                ref nextId
-            ));
+            additions.AddRange(
+                CreateRumorBranch(root.Code)
+            );
 
             foreach (DialogueComponent component in additions)
             {
-                component.SetReferences(
-                    __result,
-                    __instance.Dialog
-                );
+                component.Init(ref nextId);
             }
 
-            DialogueField.SetValue(
-                __result,
-                existing.Concat(additions).ToArray()
-            );
+            __result.components = existing
+                .Concat(additions)
+                .ToArray();
 
-            __result.NPCEntity.Api.Logger.VerboseDebug(
+            __instance.Dialog?.Api?.Logger.Notification(
                 "Rumor Network injetou opções de rumores no " +
-                $"diálogo de {__result.NPCEntity.Code}."
+                $"diálogo {loc}."
             );
         }
 
-        private static DlgTalkComponent? FindRoot(
+        private static DlgTalkComponent? FindTradingRoot(
             IEnumerable<DialogueComponent> components
         )
         {
-            DlgTalkComponent[] playerTalk = components
+            return components
                 .OfType<DlgTalkComponent>()
-                .Where(component =>
-                    component.Owner == "player"
-                )
-                .ToArray();
-
-            return playerTalk.FirstOrDefault(component =>
+                .FirstOrDefault(component =>
+                    component.Owner == "player" &&
                     component.Text?.Any(answer =>
                         answer.JumpTo == "opentrade"
                     ) == true
-                )
-                ?? playerTalk.FirstOrDefault();
+                );
         }
 
         private static IEnumerable<DialogueComponent>
-            CreateTraderBranch(
-                string rootCode,
-                ref int nextId
-            )
+            CreateTraderBranch(string rootCode)
         {
             return new DialogueComponent[]
             {
@@ -233,7 +213,6 @@ namespace RumorNetwork.Dialogue
                 ),
                 PlayerTalk(
                     "rumornetwork-trader-options",
-                    ref nextId,
                     (
                         "I'll pay four rusty gears.",
                         "rumornetwork-buytrader"
@@ -276,10 +255,7 @@ namespace RumorNetwork.Dialogue
         }
 
         private static IEnumerable<DialogueComponent>
-            CreateRumorBranch(
-                string rootCode,
-                ref int nextId
-            )
+            CreateRumorBranch(string rootCode)
         {
             return new DialogueComponent[]
             {
@@ -290,7 +266,6 @@ namespace RumorNetwork.Dialogue
                 ),
                 PlayerTalk(
                     "rumornetwork-rumor-options",
-                    ref nextId,
                     (
                         "I'll pay one rusty gear for whatever you've heard.",
                         "rumornetwork-buyapproximate"
@@ -377,7 +352,6 @@ namespace RumorNetwork.Dialogue
 
         private static DlgTalkComponent PlayerTalk(
             string code,
-            ref int nextId,
             params (string Text, string JumpTo)[] answers
         )
         {
@@ -392,7 +366,6 @@ namespace RumorNetwork.Dialogue
             {
                 elements[index] = new DialogeTextElement
                 {
-                    Id = nextId++,
                     Value = answers[index].Text,
                     JumpTo = answers[index].JumpTo
                 };
