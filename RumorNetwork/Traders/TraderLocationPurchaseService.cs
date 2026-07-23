@@ -19,10 +19,8 @@ namespace RumorNetwork.Traders
         private readonly RumorInventoryPaymentService paymentService;
         private readonly TraderKnowledgeRegistry knowledgeRegistry;
         private readonly TraderLocationSelector selector;
-        private readonly SelectiveStructureCatalogService
-            catalogService;
-        private readonly ProgressiveStructureCatalogSearchService
-            progressiveCatalogSearchService;
+        private readonly VerifiedStructureDiscoveryService
+            discoveryService;
 
         public TraderLocationPurchaseService(
             ICoreServerAPI api,
@@ -33,9 +31,7 @@ namespace RumorNetwork.Traders
             RumorInventoryPaymentService paymentService,
             TraderKnowledgeRegistry knowledgeRegistry,
             TraderLocationSelector selector,
-            SelectiveStructureCatalogService catalogService,
-            ProgressiveStructureCatalogSearchService
-                progressiveCatalogSearchService
+            VerifiedStructureDiscoveryService discoveryService
         )
         {
             this.api = api;
@@ -46,9 +42,7 @@ namespace RumorNetwork.Traders
             this.paymentService = paymentService;
             this.knowledgeRegistry = knowledgeRegistry;
             this.selector = selector;
-            this.catalogService = catalogService;
-            this.progressiveCatalogSearchService =
-                progressiveCatalogSearchService;
+            this.discoveryService = discoveryService;
         }
 
         public bool TryPurchase(
@@ -86,27 +80,23 @@ namespace RumorNetwork.Traders
 
             if (!sellerFound || seller == null)
             {
-                catalogService.RequestBackfillAround(
+                discoveryService.RequestAdditional(
+                    StructureKind.Trader,
                     (int)player.Entity.Pos.X,
                     (int)player.Entity.Pos.Z
                 );
 
                 error =
-                    "Nenhum comerciante indexado foi encontrado " +
+                    "Nenhum comerciante verificado foi encontrado " +
                     $"a até {config.TraderLocations.SellerMatchRadius:0} " +
-                    "blocos. O catálogo automático foi acionado; " +
-                    "aguarde alguns segundos e tente novamente.";
+                    "blocos. A descoberta por worldgen temporário " +
+                    "foi acionada; aguarde e tente novamente.";
 
                 return false;
             }
 
             Vec3i sellerCenter =
                 seller.CreateLocation().Center;
-
-            catalogService.RequestBackfillAround(
-                sellerCenter.X,
-                sellerCenter.Z
-            );
 
             PlayerTraderKnowledge knowledge =
                 knowledgeRegistry.GetOrCreate(
@@ -147,7 +137,7 @@ namespace RumorNetwork.Traders
 
             if (!targetFound || target == null)
             {
-                progressiveCatalogSearchService.RequestAdditional(
+                discoveryService.RequestAdditional(
                     StructureKind.Trader,
                     sellerCenter.X,
                     sellerCenter.Z
@@ -162,29 +152,26 @@ namespace RumorNetwork.Traders
                     );
 
                 bool searchActive =
-                    progressiveCatalogSearchService.IsSearching(
+                    discoveryService.IsSearching(
                         StructureKind.Trader,
                         sellerCenter.X,
                         sellerCenter.Z
                     );
 
                 error = searchActive
-                    ? "O catálogo está ampliando a busca em " +
-                        "regiões já geradas até encontrar outro " +
-                        "comerciante. " +
-                        $"Indexados={indexedTraderCount} | " +
+                    ? "O catálogo está simulando worldgen sem " +
+                        "salvar chunks até encontrar outro " +
+                        "comerciante confirmado. " +
+                        $"Verificados={indexedTraderCount} | " +
                         $"Conhecidos={knownTraderCount} | " +
-                        $"Pendentes={catalogService.PendingRegionCount} | " +
-                        "Raio atual=" +
-                        $"{progressiveCatalogSearchService.LargestRequestedRadiusRegions} " +
-                        "regiões. Tente novamente quando a busca terminar."
-                    : "Não há outro comerciante catalogado que " +
-                        "você ainda não conheça dentro do limite " +
-                        "da busca automática. " +
-                        $"Indexados={indexedTraderCount} | " +
-                        $"Conhecidos={knownTraderCount}. " +
-                        "Áreas nunca geradas ainda não contêm " +
-                        "comerciantes para catalogar.";
+                        $"Peeks ativos={discoveryService.ActivePeekCount} | " +
+                        $"Orçamento pendente={discoveryService.PendingPeekBudget}. " +
+                        "Tente novamente quando a busca terminar."
+                    : "Não há outro comerciante verificado que " +
+                        "você ainda não conheça dentro do raio e " +
+                        "orçamento configurados. " +
+                        $"Verificados={indexedTraderCount} | " +
+                        $"Conhecidos={knownTraderCount}.";
 
                 return false;
             }
