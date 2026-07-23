@@ -1,12 +1,22 @@
+using System;
 using System.Collections.Generic;
 using RumorNetwork.Catalog;
 using RumorNetwork.Rumors;
+using RumorNetwork.Structures;
+using Vintagestory.API.Common;
+using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 
 namespace RumorNetwork.Purchases
 {
     public sealed class RumorPurchaseService
     {
+        private readonly ICoreServerAPI? api;
+
+        private readonly RumorRegistry? rumorRegistry;
+
+        private readonly int regionSearchRadius;
+
         private readonly RumorDeliveryService
             deliveryService;
 
@@ -16,7 +26,7 @@ namespace RumorNetwork.Purchases
         private readonly RumorInventoryPaymentService
             paymentService;
 
-        private readonly VerifiedStructureDiscoveryService
+        private readonly VerifiedStructureDiscoveryService?
             discoveryService;
 
         public RumorPurchaseService(
@@ -32,6 +42,26 @@ namespace RumorNetwork.Purchases
             this.discoveryService = discoveryService;
         }
 
+        public RumorPurchaseService(
+            ICoreServerAPI api,
+            RumorRegistry rumorRegistry,
+            int regionSearchRadius,
+            RumorDeliveryService deliveryService,
+            RumorPriceResolver priceResolver,
+            RumorInventoryPaymentService paymentService
+        )
+        {
+            this.api = api;
+            this.rumorRegistry = rumorRegistry;
+            this.regionSearchRadius = Math.Max(
+                0,
+                regionSearchRadius
+            );
+            this.deliveryService = deliveryService;
+            this.priceResolver = priceResolver;
+            this.paymentService = paymentService;
+        }
+
         public bool TryPurchase(
             IServerPlayer player,
             RumorKnowledgeLevel knowledge,
@@ -42,15 +72,21 @@ namespace RumorNetwork.Purchases
             result = null;
             error = string.Empty;
 
-            // General rumors remain immediately purchasable. This starts
-            // verified translocator discovery in the background so remote
-            // translocators enter later draws without blocking ordinary
-            // ruins and sites.
-            discoveryService.RequestAdditional(
-                StructureKind.Translocator,
-                (int)player.Entity.Pos.X,
-                (int)player.Entity.Pos.Z
-            );
+            if (api != null && rumorRegistry != null)
+            {
+                IndexLoadedGeneralRumors(player);
+            }
+            else
+            {
+                // Compatibility path for callers that still use the previous
+                // constructor. The runtime mod system now uses local ruin
+                // indexing instead.
+                discoveryService?.RequestAdditional(
+                    StructureKind.Translocator,
+                    (int)player.Entity.Pos.X,
+                    (int)player.Entity.Pos.Z
+                );
+            }
 
             bool prepared =
                 deliveryService.TryPrepare(
@@ -65,7 +101,7 @@ namespace RumorNetwork.Purchases
                 preparedDelivery == null
             )
             {
-                error = discoveryService.IsWorking
+                error = discoveryService?.IsWorking == true
                     ? preparationError +
                         " A descoberta remota ainda está " +
                         "simulando worldgen sem salvar chunks. " +
@@ -76,11 +112,8 @@ namespace RumorNetwork.Purchases
                 return false;
             }
 
-            // The general-rumor menu advertises a price by knowledge level,
-            // before the target is drawn. Keep that price stable even when
-            // the random target happens to be a translocator. The dedicated
-            // translocator purchase remains responsible for its guaranteed,
-            // structure-specific temporal-gear price.
+            // The general-rumor menu advertises a stable price by knowledge
+            // level before a ruin is drawn.
             bool priceResolved =
                 priceResolver.TryResolveGeneralPreview(
                     knowledge,
@@ -146,6 +179,43 @@ namespace RumorNetwork.Purchases
             );
 
             return true;
+        }
+
+        private void IndexLoadedGeneralRumors(
+            IServerPlayer player
+        )
+        {
+            if (api == null || rumorRegistry == null)
+            {
+                return;
+            }
+
+            List<GeneratedStructure> structures =
+                MapRegionStructureCollector
+                    .CollectLoadedNeighborhood(
+                        api,
+                        player.Entity.Pos.AsBlockPos,
+                        regionSearchRadius,
+                        out _
+                    );
+
+            List<RumorSite> builtSites =
+                RumorSiteBuilder.Build(structures);
+
+            List<RumorSite> generalSites = new();
+
+            foreach (RumorSite site in builtSites)
+            {
+                if (
+                    RumorEligibilityPolicy
+                        .IsGeneralRumorEligible(site.Kind)
+                )
+                {
+                    generalSites.Add(site);
+                }
+            }
+
+            rumorRegistry.Merge(generalSites);
         }
     }
 }
