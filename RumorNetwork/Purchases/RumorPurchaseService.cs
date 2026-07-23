@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using RumorNetwork.Catalog;
+using RumorNetwork.Configuration;
+using RumorNetwork.Dialogue;
 using RumorNetwork.Rumors;
 using RumorNetwork.Structures;
 using Vintagestory.API.Common;
@@ -72,6 +74,31 @@ namespace RumorNetwork.Purchases
             result = null;
             error = string.Empty;
 
+            GeneralRumorConfig generalConfig =
+                RumorRuntimeSettings.GeneralRumors;
+
+            if (!generalConfig.Enabled)
+            {
+                error = RumorText.Get(
+                    "message-general-disabled"
+                );
+                return false;
+            }
+
+            if (!generalConfig.IsKnowledgeEnabled(knowledge))
+            {
+                error = knowledge ==
+                    RumorKnowledgeLevel.Approximate
+                        ? RumorText.Get(
+                            "message-approximate-disabled"
+                        )
+                        : RumorText.Get(
+                            "message-exact-disabled"
+                        );
+
+                return false;
+            }
+
             if (api != null && rumorRegistry != null)
             {
                 IndexLoadedGeneralRumors(player);
@@ -79,8 +106,7 @@ namespace RumorNetwork.Purchases
             else
             {
                 // Compatibility path for callers that still use the previous
-                // constructor. The runtime mod system now uses local ruin
-                // indexing instead.
+                // constructor. The runtime mod system uses local ruin indexing.
                 discoveryService?.RequestAdditional(
                     StructureKind.Translocator,
                     (int)player.Entity.Pos.X,
