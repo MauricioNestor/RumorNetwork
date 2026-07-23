@@ -1,4 +1,4 @@
-﻿using ProtoBuf;
+using ProtoBuf;
 using RumorNetwork.Structures;
 using Vintagestory.API.MathTools;
 
@@ -43,6 +43,9 @@ public sealed class RumorRecord
     [ProtoMember(12)]
     public int Z2 { get; set; }
 
+    [ProtoMember(13)]
+    public string SourceGroup { get; set; } = string.Empty;
+
     public Cuboidi CreateLocation()
     {
         return new Cuboidi(
@@ -67,6 +70,7 @@ public sealed class RumorRecord
             Kind = site.Kind,
             Family = site.Family,
             SourceCode = site.SourceCode,
+            SourceGroup = site.SourceGroup,
             PartCount = site.PartCount,
             Knowledge = RumorKnowledgeLevel.NotSold,
 
