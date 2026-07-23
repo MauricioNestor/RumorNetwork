@@ -25,8 +25,7 @@ public static class RumorEligibilityPolicy
             StructureKind.UndergroundRuin or
             StructureKind.BetterRuin or
             StructureKind.SurfaceRuin or
-            StructureKind.RuinedVillage or
-            StructureKind.Translocator;
+            StructureKind.RuinedVillage;
     }
 
     public static bool IsEligible(
