@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using RumorNetwork.Catalog;
 using RumorNetwork.Configuration;
 using RumorNetwork.Rumors;
+using RumorNetwork.Structures;
 using Vintagestory.API.Common;
 using Vintagestory.API.Server;
 
