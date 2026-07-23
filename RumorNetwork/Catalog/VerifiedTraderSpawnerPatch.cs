@@ -18,8 +18,19 @@ namespace RumorNetwork.Catalog
             "rumornetwork.verified-trader-spawners";
 
         private const int TraderSpawnRadius = 4;
-        private const int TraderDiscoverySaveVersion = 2;
+        private const int TraderDiscoverySaveVersion = 3;
+        private const int LoadedChunkRescanDelayMs = 1500;
 
+        private static readonly object SyncRoot = new();
+
+        private static readonly HashSet<long>
+            ScheduledLoadedChunkKeys = new();
+
+        private static readonly Dictionary<string, bool>
+            TraderEntityCodeCache =
+                new(StringComparer.OrdinalIgnoreCase);
+
+        private static ICoreServerAPI? serverApi;
         private static ILogger? logger;
         private Harmony? harmony;
 
@@ -32,10 +43,12 @@ namespace RumorNetwork.Catalog
             ICoreServerAPI api
         )
         {
+            serverApi = api;
             logger = api.Logger;
             harmony = new Harmony(HarmonyId);
 
             PatchTraderInspection(api);
+            PatchLoadedChunkRescan(api);
             PatchDiscoveryImport(api);
             PatchDiscoveryExport(api);
         }
@@ -44,6 +57,14 @@ namespace RumorNetwork.Catalog
         {
             harmony?.UnpatchAll(HarmonyId);
             harmony = null;
+
+            lock (SyncRoot)
+            {
+                ScheduledLoadedChunkKeys.Clear();
+                TraderEntityCodeCache.Clear();
+            }
+
+            serverApi = null;
             logger = null;
             base.Dispose();
         }
@@ -73,6 +94,35 @@ namespace RumorNetwork.Catalog
                 prefix: new HarmonyMethod(
                     typeof(VerifiedTraderSpawnerPatch),
                     nameof(InspectTraderSpawners)
+                )
+            );
+        }
+
+        private void PatchLoadedChunkRescan(
+            ICoreServerAPI api
+        )
+        {
+            var original = AccessTools.Method(
+                typeof(VerifiedStructureDiscoveryService),
+                "OnChunkColumnLoaded"
+            );
+
+            if (original == null)
+            {
+                api.Logger.Error(
+                    "Rumor Network não encontrou " +
+                    "OnChunkColumnLoaded para agendar a " +
+                    "segunda inspeção de traders."
+                );
+
+                return;
+            }
+
+            harmony!.Patch(
+                original,
+                postfix: new HarmonyMethod(
+                    typeof(VerifiedTraderSpawnerPatch),
+                    nameof(ScheduleLoadedChunkRescan)
                 )
             );
         }
@@ -146,7 +196,10 @@ namespace RumorNetwork.Catalog
 
             foreach (IServerChunk chunk in chunks)
             {
-                if (chunk == null)
+                if (
+                    chunk == null ||
+                    chunk.Disposed
+                )
                 {
                     continue;
                 }
@@ -180,9 +233,9 @@ namespace RumorNetwork.Catalog
                 );
             }
 
-            // The spawner is the persistent physical proof. Do not execute
-            // the original implementation, which required EntityTrader to
-            // already be materialized in chunk.Entities.
+            // A prova persistente é o spawner importado. A entidade viva é
+            // apenas fallback, porque pode ainda não existir ou estar no
+            // intervalo de respawn.
             return false;
         }
 
@@ -211,7 +264,7 @@ namespace RumorNetwork.Catalog
             {
                 if (
                     pair.Value is not BlockEntitySpawner spawner ||
-                    !IsTraderSpawner(spawner)
+                    !IsActiveTraderSpawner(spawner)
                 )
                 {
                     continue;
@@ -235,42 +288,110 @@ namespace RumorNetwork.Catalog
 
                 AddVerifiedTraderSite(
                     structure,
+                    spawnPosition.X,
+                    spawnPosition.Y,
+                    spawnPosition.Z,
                     sites,
                     siteIds
                 );
             }
         }
 
-        private static bool IsTraderSpawner(
+        private static bool IsActiveTraderSpawner(
             BlockEntitySpawner spawner
         )
         {
-            string[] entityCodes =
-                spawner.Data?.EntityCodes;
+            BESpawnerData? data = spawner.Data;
 
             if (
-                entityCodes == null ||
-                entityCodes.Length == 0
+                data == null ||
+                data.EntityCodes == null ||
+                data.EntityCodes.Length == 0 ||
+                data.MaxCount <= 0
             )
             {
                 return false;
             }
 
-            foreach (string entityCode in entityCodes)
+            // Meta-spawners not fully imported during a speculative or
+            // incomplete schematic pass are not proof that the final world
+            // will contain a working trader post.
+            if (
+                data.SpawnOnlyAfterImport &&
+                !data.WasImported
+            )
             {
-                if (
-                    !string.IsNullOrWhiteSpace(entityCode) &&
-                    entityCode.Contains(
-                        "trader",
-                        StringComparison.OrdinalIgnoreCase
-                    )
-                )
+                return false;
+            }
+
+            foreach (string entityCode in data.EntityCodes)
+            {
+                if (IsEntityCodeTrader(entityCode))
                 {
                     return true;
                 }
             }
 
             return false;
+        }
+
+        private static bool IsEntityCodeTrader(
+            string entityCode
+        )
+        {
+            if (string.IsNullOrWhiteSpace(entityCode))
+            {
+                return false;
+            }
+
+            lock (SyncRoot)
+            {
+                if (
+                    TraderEntityCodeCache.TryGetValue(
+                        entityCode,
+                        out bool cached
+                    )
+                )
+                {
+                    return cached;
+                }
+            }
+
+            bool isTrader = false;
+
+            try
+            {
+                ICoreServerAPI? api = serverApi;
+
+                if (api != null)
+                {
+                    EntityProperties? properties =
+                        api.World.GetEntityType(
+                            new AssetLocation(entityCode)
+                        );
+
+                    isTrader = string.Equals(
+                        properties?.Class,
+                        "EntityTrader",
+                        StringComparison.OrdinalIgnoreCase
+                    );
+                }
+            }
+            catch (Exception exception)
+            {
+                logger?.Debug(
+                    "Rumor Network não conseguiu resolver o " +
+                    $"tipo de entidade do spawner {entityCode}: " +
+                    exception.GetBaseException().Message
+                );
+            }
+
+            lock (SyncRoot)
+            {
+                TraderEntityCodeCache[entityCode] = isTrader;
+            }
+
+            return isTrader;
         }
 
         private static void InspectSpawnedTraderFallback(
@@ -320,6 +441,9 @@ namespace RumorNetwork.Catalog
 
                 AddVerifiedTraderSite(
                     structure,
+                    (int)Math.Floor(spawnX),
+                    (int)Math.Floor(spawnY),
+                    (int)Math.Floor(spawnZ),
                     sites,
                     siteIds
                 );
@@ -338,10 +462,7 @@ namespace RumorNetwork.Catalog
 
             foreach (GeneratedStructure structure in structures)
             {
-                if (
-                    StructureClassifier.Classify(structure)
-                    != StructureKind.Trader
-                )
+                if (!IsTraderStructure(structure))
                 {
                     continue;
                 }
@@ -376,8 +497,29 @@ namespace RumorNetwork.Catalog
             return best;
         }
 
+        private static bool IsTraderStructure(
+            GeneratedStructure structure
+        )
+        {
+            if (structure?.Location == null)
+            {
+                return false;
+            }
+
+            // The old classifier also accepted broad code substrings. For a
+            // verified trader target we require the vanilla worldgen group.
+            return string.Equals(
+                structure.Group?.Trim(),
+                "trader",
+                StringComparison.OrdinalIgnoreCase
+            );
+        }
+
         private static void AddVerifiedTraderSite(
             GeneratedStructure? structure,
+            int anchorX,
+            int anchorY,
+            int anchorZ,
             ICollection<RumorSite> sites,
             ISet<string> siteIds
         )
@@ -390,17 +532,26 @@ namespace RumorNetwork.Catalog
             string family =
                 StructureGrouper.GetFamily(structure);
 
-            Cuboidi location = structure.Location;
+            Cuboidi structureLocation = structure.Location;
+            Cuboidi targetLocation = new(
+                anchorX,
+                anchorY,
+                anchorZ,
+                anchorX,
+                anchorY,
+                anchorZ
+            );
 
             string id =
                 $"{StructureKind.Trader}|" +
                 $"{family}|" +
-                $"{location.X1}|" +
-                $"{location.Y1}|" +
-                $"{location.Z1}|" +
-                $"{location.X2}|" +
-                $"{location.Y2}|" +
-                $"{location.Z2}";
+                $"{structureLocation.X1}|" +
+                $"{structureLocation.Y1}|" +
+                $"{structureLocation.Z1}|" +
+                $"{structureLocation.X2}|" +
+                $"{structureLocation.Y2}|" +
+                $"{structureLocation.Z2}|" +
+                $"spawn={anchorX},{anchorY},{anchorZ}";
 
             if (!siteIds.Add(id))
             {
@@ -413,7 +564,7 @@ namespace RumorNetwork.Catalog
                     StructureKind.Trader,
                     family,
                     structure.Code ?? string.Empty,
-                    location,
+                    targetLocation,
                     1
                 )
             );
@@ -434,6 +585,137 @@ namespace RumorNetwork.Catalog
                 y <= location.Y2 + radius &&
                 z >= location.Z1 - radius &&
                 z <= location.Z2 + radius;
+        }
+
+        private static void ScheduleLoadedChunkRescan(
+            VerifiedStructureDiscoveryService __instance,
+            Vec2i chunkCoord
+        )
+        {
+            ICoreServerAPI? api = serverApi;
+
+            if (api == null)
+            {
+                return;
+            }
+
+            int chunkX = chunkCoord.X;
+            int chunkZ = chunkCoord.Y;
+            long chunkKey = CreateChunkKey(chunkX, chunkZ);
+
+            lock (SyncRoot)
+            {
+                if (!ScheduledLoadedChunkKeys.Add(chunkKey))
+                {
+                    return;
+                }
+            }
+
+            api.Event.RegisterCallback(
+                _ => InspectLoadedChunkAfterInitialization(
+                    __instance,
+                    chunkX,
+                    chunkZ,
+                    chunkKey
+                ),
+                LoadedChunkRescanDelayMs,
+                true
+            );
+        }
+
+        private static void InspectLoadedChunkAfterInitialization(
+            VerifiedStructureDiscoveryService service,
+            int chunkX,
+            int chunkZ,
+            long chunkKey
+        )
+        {
+            lock (SyncRoot)
+            {
+                ScheduledLoadedChunkKeys.Remove(chunkKey);
+            }
+
+            ICoreServerAPI? api = serverApi;
+
+            if (api == null)
+            {
+                return;
+            }
+
+            int chunkSize = Math.Max(
+                1,
+                api.WorldManager.ChunkSize
+            );
+
+            int chunkCountY =
+                (api.WorldManager.MapSizeY + chunkSize - 1) /
+                chunkSize;
+
+            IServerChunk[] chunks =
+                new IServerChunk[chunkCountY];
+
+            bool hasLoadedChunk = false;
+
+            for (int chunkY = 0;
+                chunkY < chunkCountY;
+                chunkY++)
+            {
+                IServerChunk loadedChunk =
+                    api.WorldManager.GetChunk(
+                        chunkX,
+                        chunkY,
+                        chunkZ
+                    );
+
+                chunks[chunkY] = loadedChunk;
+                hasLoadedChunk |= loadedChunk != null;
+            }
+
+            if (!hasLoadedChunk)
+            {
+                return;
+            }
+
+            List<RumorSite> sites = new();
+            HashSet<string> siteIds =
+                new(StringComparer.Ordinal);
+
+            InspectTraderSpawners(
+                chunks,
+                sites,
+                siteIds
+            );
+
+            if (sites.Count == 0)
+            {
+                return;
+            }
+
+            RumorRegistry? registry =
+                Traverse.Create(service)
+                    .Field("rumorRegistry")
+                    .GetValue<RumorRegistry>();
+
+            int added = registry?.Merge(sites) ?? 0;
+
+            if (added > 0)
+            {
+                logger?.Notification(
+                    "Rumor Network confirmou " +
+                    $"{added} trader(s) após a segunda inspeção " +
+                    $"do chunk carregado {chunkX},{chunkZ}."
+                );
+            }
+        }
+
+        private static long CreateChunkKey(
+            int chunkX,
+            int chunkZ
+        )
+        {
+            return
+                ((long)chunkX << 32) |
+                (uint)chunkZ;
         }
 
         private static void MigrateDiscoveryCache(
@@ -462,10 +744,12 @@ namespace RumorNetwork.Catalog
             ) ?? 0;
 
             logger?.Notification(
-                "Rumor Network invalidou o cache antigo de " +
-                "traders baseado em entidades já materializadas. " +
+                "Rumor Network invalidou traders descobertos " +
+                "pela validação anterior. " +
                 $"Traders removidos={removed}. " +
-                "Os spawners persistentes serão inspecionados."
+                "O catálogo agora exige spawner importado, " +
+                "tipo EntityTrader exato e usa a posição real " +
+                "do spawner como waypoint."
             );
         }
 
