@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
+using RumorNetwork.Configuration;
 using Vintagestory.API.Common;
 using Vintagestory.API.Server;
 using Vintagestory.API.Util;
@@ -269,34 +270,48 @@ namespace RumorNetwork.Dialogue
             bool rumorChoiceExists
         )
         {
-            if (traderChoiceExists && rumorChoiceExists)
-            {
-                return;
-            }
+            bool traderEnabled =
+                RumorRuntimeSettings
+                    .Current
+                    .TraderLocations
+                    .Enabled;
+
+            GeneralRumorConfig general =
+                RumorRuntimeSettings.GeneralRumors;
+
+            bool rumorEnabled =
+                general.Enabled &&
+                (
+                    general.ApproximateEnabled ||
+                    general.ExactEnabled ||
+                    general.TranslocatorEnabled
+                );
 
             List<DialogeTextElement> answers = new(
                 root.Text ??
                 Array.Empty<DialogeTextElement>()
             );
 
-            if (!traderChoiceExists)
+            if (!traderChoiceExists && traderEnabled)
             {
                 answers.Add(new DialogeTextElement
                 {
                     Id = nextId++,
-                    Value =
-                        "Do you know any other traders around?",
+                    Value = RumorText.Get(
+                        "dialogue-root-trader-choice"
+                    ),
                     JumpTo = TraderRootCode
                 });
             }
 
-            if (!rumorChoiceExists)
+            if (!rumorChoiceExists && rumorEnabled)
             {
                 answers.Add(new DialogeTextElement
                 {
                     Id = nextId++,
-                    Value =
-                        "Have you heard any rumors lately?",
+                    Value = RumorText.Get(
+                        "dialogue-root-rumor-choice"
+                    ),
                     JumpTo = RumorRootCode
                 });
             }
@@ -311,17 +326,17 @@ namespace RumorNetwork.Dialogue
             {
                 NpcTalk(
                     TraderRootCode,
-                    "One of my colleagues may be stationed nearby. I can mark their location on your map for four rusty gears.",
+                    RumorText.Get("dialogue-trader-intro"),
                     "rumornetwork-trader-options"
                 ),
                 PlayerTalk(
                     "rumornetwork-trader-options",
                     (
-                        "I'll pay four rusty gears.",
+                        RumorText.Get("dialogue-trader-pay"),
                         "rumornetwork-buytrader"
                     ),
                     (
-                        "I don't have that many gears.",
+                        RumorText.Get("dialogue-trader-cancel"),
                         rootCode
                     )
                 ),
@@ -331,27 +346,27 @@ namespace RumorNetwork.Dialogue
                 ),
                 NpcTalk(
                     "rumornetwork-trader-success",
-                    "There. I've marked my colleague's location on your map.",
+                    RumorText.Get("dialogue-trader-success"),
                     rootCode
                 ),
                 NpcTalk(
                     "rumornetwork-trader-searching",
-                    "Give me a moment. I need to think about who might still be operating nearby. Ask me again shortly.",
+                    RumorText.Get("dialogue-trader-searching"),
                     rootCode
                 ),
                 NpcTalk(
                     "rumornetwork-trader-quota",
-                    "That's everyone I know how to reach.",
+                    RumorText.Get("dialogue-trader-quota"),
                     rootCode
                 ),
                 NpcTalk(
                     "rumornetwork-trader-nofunds",
-                    "Come back when you have four rusty gears.",
+                    RumorText.Get("dialogue-trader-nofunds"),
                     rootCode
                 ),
                 NpcTalk(
                     "rumornetwork-trader-failed",
-                    "I don't know of any other traders I can point you toward. Sorry.",
+                    RumorText.Get("dialogue-trader-failed"),
                     rootCode
                 )
             };
@@ -360,75 +375,149 @@ namespace RumorNetwork.Dialogue
         private static IEnumerable<DialogueComponent>
             CreateRumorBranch(string rootCode)
         {
-            return new DialogueComponent[]
-            {
+            GeneralRumorConfig config =
+                RumorRuntimeSettings.GeneralRumors;
+
+            List<(string Text, string JumpTo)> answers = new();
+            List<DialogueComponent> components = new();
+
+            components.Add(
                 NpcTalk(
                     RumorRootCode,
-                    "Certainly. But useful information has a price.",
+                    RumorText.Get("dialogue-rumor-intro"),
                     "rumornetwork-rumor-options"
-                ),
-                PlayerTalk(
-                    "rumornetwork-rumor-options",
+                )
+            );
+
+            if (config.Enabled && config.ApproximateEnabled)
+            {
+                answers.Add(
                     (
-                        "I'll pay one rusty gear for whatever you've heard.",
+                        RumorText.Get(
+                            "dialogue-rumor-approximate-pay"
+                        ),
                         "rumornetwork-buyapproximate"
-                    ),
-                    (
-                        "Here are three rusty gears. I want reliable information.",
-                        "rumornetwork-buyexact"
-                    ),
-                    (
-                        "I have a temporal gear. I want exceptional gossip.",
-                        "rumornetwork-buytranslocator"
-                    ),
-                    (
-                        "Never mind. I'm not interested.",
-                        rootCode
                     )
-                ),
-                Action(
-                    "rumornetwork-buyapproximate",
-                    "buyapproximate"
-                ),
-                Action(
-                    "rumornetwork-buyexact",
-                    "buyexact"
-                ),
-                Action(
-                    "rumornetwork-buytranslocator",
-                    "buytranslocator"
-                ),
-                NpcTalk(
-                    "rumornetwork-rumor-approximate",
-                    "I've marked the general area on your map. You'll have to do some searching yourself.",
-                    rootCode
-                ),
-                NpcTalk(
-                    "rumornetwork-rumor-exact",
-                    "I've marked the exact location. Try not to get yourself killed.",
-                    rootCode
-                ),
-                NpcTalk(
-                    "rumornetwork-rumor-translocator",
-                    "I know the location of an unrepaired ancient translocator. I've marked it precisely on your map.",
-                    rootCode
-                ),
-                NpcTalk(
-                    "rumornetwork-rumor-searching",
-                    "That kind of information takes time. Ask me again in a moment.",
-                    rootCode
-                ),
-                NpcTalk(
-                    "rumornetwork-rumor-nofunds",
-                    "Useful information is not free. Come back when you can pay.",
-                    rootCode
-                ),
-                NpcTalk(
-                    "rumornetwork-rumor-failed",
-                    "I don't have anything useful for you right now.",
+                );
+            }
+
+            if (config.Enabled && config.ExactEnabled)
+            {
+                answers.Add(
+                    (
+                        RumorText.Get(
+                            "dialogue-rumor-exact-pay"
+                        ),
+                        "rumornetwork-buyexact"
+                    )
+                );
+            }
+
+            if (config.Enabled && config.TranslocatorEnabled)
+            {
+                answers.Add(
+                    (
+                        RumorText.Get(
+                            "dialogue-rumor-translocator-pay"
+                        ),
+                        "rumornetwork-buytranslocator"
+                    )
+                );
+            }
+
+            answers.Add(
+                (
+                    RumorText.Get("dialogue-rumor-cancel"),
                     rootCode
                 )
-            };
+            );
+
+            components.Add(
+                PlayerTalk(
+                    "rumornetwork-rumor-options",
+                    answers.ToArray()
+                )
+            );
+
+            if (config.Enabled && config.ApproximateEnabled)
+            {
+                components.Add(
+                    Action(
+                        "rumornetwork-buyapproximate",
+                        "buyapproximate"
+                    )
+                );
+            }
+
+            if (config.Enabled && config.ExactEnabled)
+            {
+                components.Add(
+                    Action(
+                        "rumornetwork-buyexact",
+                        "buyexact"
+                    )
+                );
+            }
+
+            if (config.Enabled && config.TranslocatorEnabled)
+            {
+                components.Add(
+                    Action(
+                        "rumornetwork-buytranslocator",
+                        "buytranslocator"
+                    )
+                );
+            }
+
+            components.AddRange(
+                new DialogueComponent[]
+                {
+                    NpcTalk(
+                        "rumornetwork-rumor-approximate",
+                        RumorText.Get(
+                            "dialogue-rumor-approximate-success"
+                        ),
+                        rootCode
+                    ),
+                    NpcTalk(
+                        "rumornetwork-rumor-exact",
+                        RumorText.Get(
+                            "dialogue-rumor-exact-success"
+                        ),
+                        rootCode
+                    ),
+                    NpcTalk(
+                        "rumornetwork-rumor-translocator",
+                        RumorText.Get(
+                            "dialogue-rumor-translocator-success"
+                        ),
+                        rootCode
+                    ),
+                    NpcTalk(
+                        "rumornetwork-rumor-searching",
+                        RumorText.Get(
+                            "dialogue-rumor-searching"
+                        ),
+                        rootCode
+                    ),
+                    NpcTalk(
+                        "rumornetwork-rumor-nofunds",
+                        RumorText.Get(
+                            "dialogue-rumor-nofunds"
+                        ),
+                        rootCode
+                    ),
+                    NpcTalk(
+                        "rumornetwork-rumor-failed",
+                        RumorText.Get(
+                            "dialogue-rumor-failed"
+                        ),
+                        rootCode
+                    )
+                }
+            );
+
+            return components;
         }
 
         private static DlgTalkComponent NpcTalk(
