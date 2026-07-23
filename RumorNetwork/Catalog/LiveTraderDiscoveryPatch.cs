@@ -46,12 +46,19 @@ namespace RumorNetwork.Catalog
 
             MethodInfo? modStart = AccessTools.Method(
                 typeof(RumorNetworkModSystem),
-                nameof(RumorNetworkModSystem.StartServerSide)
+                nameof(RumorNetworkModSystem.StartServerSide),
+                new[] { typeof(ICoreServerAPI) }
             );
 
             MethodInfo? traderInitialize = AccessTools.Method(
                 typeof(EntityTrader),
-                "Initialize"
+                nameof(EntityTrader.Initialize),
+                new[]
+                {
+                    typeof(EntityProperties),
+                    typeof(ICoreAPI),
+                    typeof(long)
+                }
             );
 
             MethodInfo? availabilityExecute = AccessTools.Method(
