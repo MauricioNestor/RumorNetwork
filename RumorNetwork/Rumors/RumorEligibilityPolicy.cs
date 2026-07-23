@@ -9,9 +9,13 @@ public static class RumorEligibilityPolicy
         StructureKind kind
     )
     {
-        return
-            kind == StructureKind.Trader ||
-            kind == StructureKind.Translocator ||
+        return kind is
+            StructureKind.Trader or
+            StructureKind.Translocator or
+            StructureKind.UndergroundRuin or
+            StructureKind.BetterRuin or
+            StructureKind.SurfaceRuin or
+            StructureKind.RuinedVillage ||
             IsGeneralRumorEligible(kind);
     }
 
