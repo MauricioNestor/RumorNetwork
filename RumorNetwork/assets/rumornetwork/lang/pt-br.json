@@ -28,6 +28,8 @@
   "offer-trader-description": "A localização exata do comerciante desconhecido mais próximo que este vendedor conhece.",
   "waypoint-ruins-approximate": "Rumor: Ruínas - Aproximado",
   "waypoint-ruins-exact": "Rumor: Ruínas - Exato",
+  "waypoint-generic-approximate": "Rumor: {0} - Aproximado",
+  "waypoint-generic-exact": "Rumor: {0} - Exato",
   "waypoint-translocator": "Rumor: Translocador",
   "waypoint-trader": "Rumor: Comerciante",
   "message-general-disabled": "Rumores gerais estão desativados na configuração.",
