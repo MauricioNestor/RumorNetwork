@@ -25,6 +25,25 @@ public sealed class RumorSite
         StructureKind kind,
         string family,
         string sourceCode,
+        Cuboidi location,
+        int partCount
+    ) : this(
+        id,
+        kind,
+        family,
+        sourceCode,
+        string.Empty,
+        location,
+        partCount
+    )
+    {
+    }
+
+    public RumorSite(
+        string id,
+        StructureKind kind,
+        string family,
+        string sourceCode,
         string sourceGroup,
         Cuboidi location,
         int partCount
