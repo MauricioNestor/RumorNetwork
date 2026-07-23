@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using RumorNetwork.Configuration;
+using RumorNetwork.Dialogue;
 using RumorNetwork.Purchases;
 using RumorNetwork.Rumors;
 
@@ -28,26 +29,42 @@ namespace RumorNetwork.Offers
             offers = resolvedOffers.AsReadOnly();
             error = string.Empty;
 
-            if (!TryAddGeneralOffer(
+            if (
+                config.GeneralRumors.Enabled &&
+                config.GeneralRumors.ApproximateEnabled &&
+                !TryAddGeneralOffer(
                     resolvedOffers,
                     RumorKnowledgeLevel.Approximate,
                     RumorOfferKind.GeneralApproximate,
-                    "Rumor aproximado",
-                    "Uma localização imprecisa de um local interessante.",
+                    RumorText.Get(
+                        "offer-general-approximate-title"
+                    ),
+                    RumorText.Get(
+                        "offer-general-approximate-description"
+                    ),
                     out error
-                ))
+                )
+            )
             {
                 return false;
             }
 
-            if (!TryAddGeneralOffer(
+            if (
+                config.GeneralRumors.Enabled &&
+                config.GeneralRumors.ExactEnabled &&
+                !TryAddGeneralOffer(
                     resolvedOffers,
                     RumorKnowledgeLevel.Exact,
                     RumorOfferKind.GeneralExact,
-                    "Rumor exato",
-                    "A localização exata de um local interessante.",
+                    RumorText.Get(
+                        "offer-general-exact-title"
+                    ),
+                    RumorText.Get(
+                        "offer-general-exact-description"
+                    ),
                     out error
-                ))
+                )
+            )
             {
                 return false;
             }
@@ -72,8 +89,10 @@ namespace RumorNetwork.Offers
                     new RumorOffer(
                         "trader-location-exact",
                         RumorOfferKind.TraderLocationExact,
-                        "Localização de comerciante",
-                        "A localização exata do comerciante desconhecido mais próximo deste vendedor.",
+                        RumorText.Get("offer-trader-title"),
+                        RumorText.Get(
+                            "offer-trader-description"
+                        ),
                         RumorKnowledgeLevel.Exact,
                         traderPrice,
                         false
