@@ -1,5 +1,4 @@
 using System;
-using RumorNetwork.Offers;
 using RumorNetwork.Purchases;
 using RumorNetwork.Rumors;
 using RumorNetwork.Traders;
@@ -11,21 +10,25 @@ namespace RumorNetwork.Dialogue
     public static class RumorDialogueRuntime
     {
         private static RumorPurchaseService? rumorPurchaseService;
+        private static TranslocatorPurchaseService? translocatorPurchaseService;
         private static TraderLocationPurchaseService? traderPurchaseService;
         private static RumorRegistry? rumorRegistry;
 
         public static bool Ready =>
             rumorPurchaseService != null &&
+            translocatorPurchaseService != null &&
             traderPurchaseService != null &&
             rumorRegistry != null;
 
         public static void Configure(
             RumorPurchaseService rumorPurchases,
+            TranslocatorPurchaseService translocatorPurchases,
             TraderLocationPurchaseService traderPurchases,
             RumorRegistry registry
         )
         {
             rumorPurchaseService = rumorPurchases;
+            translocatorPurchaseService = translocatorPurchases;
             traderPurchaseService = traderPurchases;
             rumorRegistry = registry;
         }
@@ -33,6 +36,7 @@ namespace RumorNetwork.Dialogue
         public static void Reset()
         {
             rumorPurchaseService = null;
+            translocatorPurchaseService = null;
             traderPurchaseService = null;
             rumorRegistry = null;
         }
@@ -167,7 +171,7 @@ namespace RumorNetwork.Dialogue
         )
         {
             bool purchased =
-                rumorPurchaseService!.TryPurchaseTranslocator(
+                translocatorPurchaseService!.TryPurchase(
                     player,
                     out RumorPurchaseResult? result,
                     out string error
@@ -191,8 +195,8 @@ namespace RumorNetwork.Dialogue
             string error
         )
         {
-            if (error.Contains("descoberta remota", StringComparison.OrdinalIgnoreCase) ||
-                error.Contains("Peeks", StringComparison.OrdinalIgnoreCase))
+            if (error.Contains("Peeks", StringComparison.OrdinalIgnoreCase) ||
+                error.Contains("procurando", StringComparison.OrdinalIgnoreCase))
             {
                 return "searching";
             }
