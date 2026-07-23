@@ -4,7 +4,7 @@ using RumorNetwork.Rumors;
 
 namespace RumorNetwork.Configuration
 {
-    public sealed class RumorNetworkConfig
+    public sealed partial class RumorNetworkConfig
     {
         public int Version;
 
@@ -31,6 +31,8 @@ namespace RumorNetwork.Configuration
 
         public void Normalize()
         {
+            int sourceVersion = Version;
+
             Pricing ??=
                 RumorPricingConfig.CreateDefault();
 
@@ -74,11 +76,12 @@ namespace RumorNetwork.Configuration
                 RemoteCatalog.StopAfterNewTargets = 1;
             }
 
+            NormalizeAdvanced(sourceVersion);
             Pricing.Normalize();
             TraderLocations.Normalize();
             RemoteCatalog.Normalize();
 
-            Version = 4;
+            Version = 5;
         }
     }
 
