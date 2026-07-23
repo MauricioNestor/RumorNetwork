@@ -76,9 +76,13 @@ namespace RumorNetwork.Purchases
                 return false;
             }
 
+            // The general-rumor menu advertises a price by knowledge level,
+            // before the target is drawn. Keep that price stable even when
+            // the random target happens to be a translocator. The dedicated
+            // translocator purchase remains responsible for its guaranteed,
+            // structure-specific temporal-gear price.
             bool priceResolved =
-                priceResolver.TryResolve(
-                    preparedDelivery.Record.Kind,
+                priceResolver.TryResolveGeneralPreview(
                     knowledge,
                     out RumorPrice? price,
                     out string priceError
