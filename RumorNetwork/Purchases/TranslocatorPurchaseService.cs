@@ -47,10 +47,7 @@ namespace RumorNetwork.Purchases
             );
 
             List<RumorRecord> candidates =
-                rumorRegistry.CreateShuffledNotSoldCandidates(
-                    api.World.Rand,
-                    StructureKind.Translocator
-                );
+                CreateShuffledTranslocatorCandidates();
 
             RumorPreparedDelivery? prepared = null;
 
@@ -108,7 +105,12 @@ namespace RumorNetwork.Purchases
 
             if (!paymentTaken || receipt == null)
             {
-                error = paymentError + " Preço: " + price.Description + ".";
+                error =
+                    paymentError +
+                    " Preço: " +
+                    price.Description +
+                    ".";
+
                 return false;
             }
 
@@ -127,7 +129,10 @@ namespace RumorNetwork.Purchases
             if (!waypointsAdded)
             {
                 paymentService.Refund(player, receipt, out _);
-                error = waypointError + " O pagamento foi devolvido.";
+                error =
+                    waypointError +
+                    " O pagamento foi devolvido.";
+
                 return false;
             }
 
@@ -148,7 +153,10 @@ namespace RumorNetwork.Purchases
                 );
 
                 paymentService.Refund(player, receipt, out _);
-                error = "O translocador não pôde ser reservado. O pagamento foi devolvido.";
+                error =
+                    "O translocador não pôde ser reservado. " +
+                    "O pagamento foi devolvido.";
+
                 return false;
             }
 
@@ -159,6 +167,44 @@ namespace RumorNetwork.Purchases
             );
 
             return true;
+        }
+
+        private List<RumorRecord>
+            CreateShuffledTranslocatorCandidates()
+        {
+            List<RumorRecord> candidates = new();
+
+            foreach (RumorRecord record in rumorRegistry.Records)
+            {
+                if (
+                    record.Knowledge ==
+                        RumorKnowledgeLevel.NotSold &&
+                    record.Kind == StructureKind.Translocator
+                )
+                {
+                    candidates.Add(record);
+                }
+            }
+
+            for (
+                int index = candidates.Count - 1;
+                index > 0;
+                index--
+            )
+            {
+                int swapIndex = api.World.Rand.Next(index + 1);
+
+                (
+                    candidates[index],
+                    candidates[swapIndex]
+                ) =
+                (
+                    candidates[swapIndex],
+                    candidates[index]
+                );
+            }
+
+            return candidates;
         }
     }
 }
