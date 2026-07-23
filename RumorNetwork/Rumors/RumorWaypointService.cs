@@ -448,22 +448,46 @@ namespace RumorNetwork.Rumors
             RumorWaypointConfig config =
                 RumorRuntimeSettings.Waypoints;
 
-            string key = record.Kind switch
+            if (record.Kind == StructureKind.Trader)
             {
-                StructureKind.Trader =>
-                    config.TraderTitleKey,
+                return Lang.Get(config.TraderTitleKey);
+            }
 
-                StructureKind.Translocator =>
-                    config.TranslocatorTitleKey,
+            if (record.Kind == StructureKind.Translocator)
+            {
+                return Lang.Get(config.TranslocatorTitleKey);
+            }
 
-                _ when knowledge ==
-                    RumorKnowledgeLevel.Approximate =>
-                        config.ApproximateRuinTitleKey,
+            if (IsRuin(record.Kind))
+            {
+                string ruinKey = knowledge ==
+                    RumorKnowledgeLevel.Approximate
+                        ? config.ApproximateRuinTitleKey
+                        : config.ExactRuinTitleKey;
 
-                _ => config.ExactRuinTitleKey
-            };
+                return Lang.Get(ruinKey);
+            }
 
-            return Lang.Get(key);
+            string genericKey = knowledge ==
+                RumorKnowledgeLevel.Approximate
+                    ? "rumornetwork:waypoint-generic-approximate"
+                    : "rumornetwork:waypoint-generic-exact";
+
+            return Lang.Get(
+                genericKey,
+                record.Kind.ToString()
+            );
+        }
+
+        private static bool IsRuin(
+            StructureKind kind
+        )
+        {
+            return kind is
+                StructureKind.UndergroundRuin or
+                StructureKind.BetterRuin or
+                StructureKind.SurfaceRuin or
+                StructureKind.RuinedVillage;
         }
     }
 }
