@@ -30,6 +30,7 @@ namespace RumorNetwork
         private RumorTargetResolver rumorTargetResolver = null!;
         private RumorDeliveryService rumorDeliveryService = null!;
         private RumorPurchaseService rumorPurchaseService = null!;
+        private BetterRuinsPurchaseService betterRuinsPurchaseService = null!;
         private TranslocatorPurchaseService translocatorPurchaseService = null!;
         private RumorOfferService rumorOfferService = null!;
         private TraderLocationPurchaseService traderLocationPurchaseService = null!;
@@ -53,7 +54,15 @@ namespace RumorNetwork
                     Mod.Logger
                 );
 
-            RumorRuntimeSettings.Configure(config);
+            bool betterRuinsInstalled =
+                api.ModLoader.IsModEnabled(
+                    BetterRuinsRumorPolicy.ModId
+                );
+
+            RumorRuntimeSettings.Configure(
+                config,
+                betterRuinsInstalled
+            );
 
             caveCellClassifier =
                 new CaveCellClassifier(
@@ -108,6 +117,17 @@ namespace RumorNetwork
                 paymentService
             );
 
+            betterRuinsPurchaseService =
+                new BetterRuinsPurchaseService(
+                    api,
+                    rumorRegistry,
+                    RegionSearchRadius,
+                    rumorTargetResolver,
+                    rumorDeliveryService,
+                    priceResolver,
+                    paymentService
+                );
+
             translocatorPurchaseService =
                 new TranslocatorPurchaseService(
                     api,
@@ -142,6 +162,7 @@ namespace RumorNetwork
 
             RumorDialogueRuntime.Configure(
                 rumorPurchaseService,
+                betterRuinsPurchaseService,
                 translocatorPurchaseService,
                 traderLocationPurchaseService,
                 rumorRegistry
@@ -179,6 +200,12 @@ namespace RumorNetwork
                     "Rumor Network debug commands are disabled."
                 );
             }
+
+            Mod.Logger.Notification(
+                betterRuinsInstalled
+                    ? "Rumor Network detected BetterRuins."
+                    : "Rumor Network did not detect BetterRuins."
+            );
 
             Mod.Logger.Notification(
                 "Rumor Network carregado no servidor."
