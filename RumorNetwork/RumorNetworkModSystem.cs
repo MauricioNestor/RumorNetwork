@@ -95,10 +95,12 @@ namespace RumorNetwork
                 );
 
             rumorPurchaseService = new RumorPurchaseService(
+                api,
+                rumorRegistry,
+                RegionSearchRadius,
                 rumorDeliveryService,
                 priceResolver,
-                paymentService,
-                discoveryService
+                paymentService
             );
 
             translocatorPurchaseService =
