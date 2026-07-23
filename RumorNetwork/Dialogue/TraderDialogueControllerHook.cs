@@ -107,6 +107,19 @@ namespace RumorNetwork.Dialogue
             }
 
             if (
+                __instance.Text?.Any(answer =>
+                    string.Equals(
+                        answer.JumpTo,
+                        "opentrade",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                ) != true
+            )
+            {
+                return;
+            }
+
+            if (
                 ComponentControllerField == null ||
                 ControllerDialogueField == null
             )
