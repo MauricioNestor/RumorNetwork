@@ -5,6 +5,8 @@ using System.Reflection;
 using HarmonyLib;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Server;
+using Vintagestory.API.Util;
 using Vintagestory.GameContent;
 
 namespace RumorNetwork.Dialogue
@@ -14,8 +16,20 @@ namespace RumorNetwork.Dialogue
         private const string HarmonyId =
             "rumornetwork.trader-dialogue-controller-hook";
 
-        private const string TraderRootCode =
+        internal const string TraderRootCode =
             "rumornetwork-root-traders";
+
+        internal const string TraderCheckCode =
+            "rumornetwork-check-traders";
+
+        internal const string TraderSearchingCode =
+            "rumornetwork-trader-searching";
+
+        internal const string TraderQuotaCode =
+            "rumornetwork-trader-quota";
+
+        internal const string TraderFailedCode =
+            "rumornetwork-trader-failed";
 
         private const string RumorRootCode =
             "rumornetwork-root-rumors";
@@ -141,13 +155,36 @@ namespace RumorNetwork.Dialogue
                 return;
             }
 
-            bool menuAlreadyLinked =
-                HasRumorChoices(__instance);
+            bool traderChoiceExists =
+                HasChoice(
+                    __instance,
+                    TraderRootCode
+                ) ||
+                HasChoice(
+                    __instance,
+                    TraderCheckCode
+                );
+
+            bool rumorChoiceExists =
+                HasChoice(
+                    __instance,
+                    RumorRootCode
+                );
+
+            RouteTraderChoiceThroughCheck(__instance);
 
             bool traderBranchExists = existing.Any(component =>
                 string.Equals(
                     component.Code,
                     TraderRootCode,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            );
+
+            bool traderCheckExists = existing.Any(component =>
+                string.Equals(
+                    component.Code,
+                    TraderCheckCode,
                     StringComparison.OrdinalIgnoreCase
                 )
             );
@@ -161,8 +198,10 @@ namespace RumorNetwork.Dialogue
             );
 
             if (
-                menuAlreadyLinked &&
+                traderChoiceExists &&
+                rumorChoiceExists &&
                 traderBranchExists &&
+                traderCheckExists &&
                 rumorBranchExists
             )
             {
@@ -171,15 +210,25 @@ namespace RumorNetwork.Dialogue
 
             int nextId = FindNextAnswerId(existing);
 
-            if (!menuAlreadyLinked)
-            {
-                AppendRootChoices(
-                    __instance,
-                    ref nextId
-                );
-            }
+            AppendRootChoices(
+                __instance,
+                ref nextId,
+                traderChoiceExists,
+                rumorChoiceExists
+            );
 
             List<DialogueComponent> additions = new();
+
+            if (!traderCheckExists)
+            {
+                additions.Add(
+                    new TraderAvailabilityDialogueComponent
+                    {
+                        Code = TraderCheckCode,
+                        Type = "rumornetwork-trader-check"
+                    }
+                );
+            }
 
             if (!traderBranchExists)
             {
@@ -248,22 +297,40 @@ namespace RumorNetwork.Dialogue
             );
         }
 
-        private static bool HasRumorChoices(
-            DlgTalkComponent component
+        private static bool HasChoice(
+            DlgTalkComponent component,
+            string jumpTo
         )
         {
             return component.Text?.Any(answer =>
                 string.Equals(
                     answer.JumpTo,
-                    TraderRootCode,
-                    StringComparison.OrdinalIgnoreCase
-                ) ||
-                string.Equals(
-                    answer.JumpTo,
-                    RumorRootCode,
+                    jumpTo,
                     StringComparison.OrdinalIgnoreCase
                 )
             ) == true;
+        }
+
+        private static void RouteTraderChoiceThroughCheck(
+            DlgTalkComponent root
+        )
+        {
+            if (root.Text == null)
+            {
+                return;
+            }
+
+            foreach (DialogeTextElement answer in root.Text)
+            {
+                if (string.Equals(
+                        answer.JumpTo,
+                        TraderRootCode,
+                        StringComparison.OrdinalIgnoreCase
+                    ))
+                {
+                    answer.JumpTo = TraderCheckCode;
+                }
+            }
         }
 
         private static int FindNextAnswerId(
@@ -283,29 +350,42 @@ namespace RumorNetwork.Dialogue
 
         private static void AppendRootChoices(
             DlgTalkComponent root,
-            ref int nextId
+            ref int nextId,
+            bool traderChoiceExists,
+            bool rumorChoiceExists
         )
         {
+            if (traderChoiceExists && rumorChoiceExists)
+            {
+                return;
+            }
+
             List<DialogeTextElement> answers = new(
                 root.Text ??
                 Array.Empty<DialogeTextElement>()
             );
 
-            answers.Add(new DialogeTextElement
+            if (!traderChoiceExists)
             {
-                Id = nextId++,
-                Value =
-                    "Do you know any other traders around?",
-                JumpTo = TraderRootCode
-            });
+                answers.Add(new DialogeTextElement
+                {
+                    Id = nextId++,
+                    Value =
+                        "Do you know any other traders around?",
+                    JumpTo = TraderCheckCode
+                });
+            }
 
-            answers.Add(new DialogeTextElement
+            if (!rumorChoiceExists)
             {
-                Id = nextId++,
-                Value =
-                    "Have you heard any rumors lately?",
-                JumpTo = RumorRootCode
-            });
+                answers.Add(new DialogeTextElement
+                {
+                    Id = nextId++,
+                    Value =
+                        "Have you heard any rumors lately?",
+                    JumpTo = RumorRootCode
+                });
+            }
 
             root.Text = answers.ToArray();
         }
@@ -340,6 +420,50 @@ namespace RumorNetwork.Dialogue
             }
 
             return true;
+        }
+    }
+
+    internal sealed class TraderAvailabilityDialogueComponent :
+        DialogueComponent
+    {
+        public override string Execute()
+        {
+            if (
+                controller.NPCEntity.Api is not ICoreServerAPI sapi ||
+                controller.PlayerEntity.Player is not IServerPlayer player
+            )
+            {
+                return null;
+            }
+
+            string result = RumorDialogueRuntime.Execute(
+                player,
+                "checktrader"
+            );
+
+            string responseCode = result switch
+            {
+                "available" =>
+                    TraderDialogueControllerHook.TraderRootCode,
+
+                "searching" =>
+                    TraderDialogueControllerHook.TraderSearchingCode,
+
+                "quota" or "none" =>
+                    TraderDialogueControllerHook.TraderQuotaCode,
+
+                _ =>
+                    TraderDialogueControllerHook.TraderFailedCode
+            };
+
+            sapi.Network.SendEntityPacket(
+                player,
+                controller.NPCEntity.EntityId,
+                TraderDialoguePatch.ResultPacketId,
+                SerializerUtil.Serialize(responseCode)
+            );
+
+            return responseCode;
         }
     }
 }
