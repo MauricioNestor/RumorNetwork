@@ -159,8 +159,7 @@ namespace RumorNetwork.Dialogue
             DialogueController controller
         )
         {
-            string entityPrefix =
-                controller.NPCEntity.EntityId + "|";
+            string entityPrefix = CreateEntityPrefix(controller);
 
             foreach (
                 KeyValuePair<string, RootSnapshot> pair
@@ -183,8 +182,17 @@ namespace RumorNetwork.Dialogue
         )
         {
             return
-                controller.NPCEntity.EntityId + "|" +
+                CreateEntityPrefix(controller) +
                 (rootCode ?? string.Empty);
+        }
+
+        private static string CreateEntityPrefix(
+            DialogueController controller
+        )
+        {
+            return
+                controller.NPCEntity.Api.Side + "|" +
+                controller.NPCEntity.EntityId + "|";
         }
 
         private static bool IsRumorNetworkBranch(string? code)
