@@ -3,6 +3,7 @@ using HarmonyLib;
 using RumorNetwork.Configuration;
 using RumorNetwork.Rumors;
 using Vintagestory.API.Common;
+using Vintagestory.API.Server;
 
 namespace RumorNetwork.Structures
 {
@@ -21,7 +22,7 @@ namespace RumorNetwork.Structures
             return -0.92;
         }
 
-        public override void Start(ICoreAPI api)
+        public override void StartServerSide(ICoreServerAPI api)
         {
             harmony = new Harmony(HarmonyId);
 
