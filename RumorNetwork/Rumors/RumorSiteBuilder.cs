@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using RumorNetwork.Structures;
 using Vintagestory.API.Common;
@@ -72,6 +72,7 @@ public static class RumorSiteBuilder
                     kind,
                     village.Family,
                     village.Family,
+                    string.Empty,
                     location,
                     village.Parts.Count
                 )
@@ -117,6 +118,7 @@ public static class RumorSiteBuilder
                     kind,
                     family,
                     structure.Code ?? string.Empty,
+                    structure.Group ?? string.Empty,
                     location,
                     1
                 )
