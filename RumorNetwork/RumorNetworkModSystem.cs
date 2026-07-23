@@ -150,22 +150,35 @@ namespace RumorNetwork
             api.Event.SaveGameLoaded += OnSaveGameLoaded;
             api.Event.GameWorldSave += OnGameWorldSave;
 
-            RumorCommandRegistrar.Register(
-                api,
-                Mod.Logger,
-                rumorRegistry,
-                rumorTargetResolver,
-                rumorDeliveryService,
-                rumorPurchaseService,
-                rumorOfferService,
-                traderLocationPurchaseService,
-                traderKnowledgeRegistry,
-                discoveryService,
-                caveCellClassifier,
-                caveBoundaryScanner,
-                caveSkyConnectionSearch,
-                RegionSearchRadius
-            );
+            if (config.Debug?.Enabled == true)
+            {
+                RumorCommandRegistrar.Register(
+                    api,
+                    Mod.Logger,
+                    rumorRegistry,
+                    rumorTargetResolver,
+                    rumorDeliveryService,
+                    rumorPurchaseService,
+                    rumorOfferService,
+                    traderLocationPurchaseService,
+                    traderKnowledgeRegistry,
+                    discoveryService,
+                    caveCellClassifier,
+                    caveBoundaryScanner,
+                    caveSkyConnectionSearch,
+                    RegionSearchRadius
+                );
+
+                Mod.Logger.Warning(
+                    "Rumor Network debug commands are enabled."
+                );
+            }
+            else
+            {
+                Mod.Logger.Notification(
+                    "Rumor Network debug commands are disabled."
+                );
+            }
 
             Mod.Logger.Notification(
                 "Rumor Network carregado no servidor."
