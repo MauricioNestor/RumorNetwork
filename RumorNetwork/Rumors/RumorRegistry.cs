@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using RumorNetwork.Configuration;
 using RumorNetwork.Structures;
@@ -28,8 +28,15 @@ public sealed class RumorRegistry
                 continue;
             }
 
-            if (records.ContainsKey(site.Id))
+            if (records.TryGetValue(
+                    site.Id,
+                    out RumorRecord? existing
+                ))
             {
+                existing.SourceCode = site.SourceCode;
+                existing.SourceGroup = site.SourceGroup;
+                existing.Family = site.Family;
+                existing.PartCount = site.PartCount;
                 continue;
             }
 
@@ -175,7 +182,7 @@ public sealed class RumorRegistry
     {
         return new RumorRegistrySaveData
         {
-            Version = 1,
+            Version = 2,
             Records = new List<RumorRecord>(
                 records.Values
             )
@@ -203,6 +210,9 @@ public sealed class RumorRegistry
                 continue;
             }
 
+            record.Family ??= string.Empty;
+            record.SourceCode ??= string.Empty;
+            record.SourceGroup ??= string.Empty;
             records[record.Id] = record;
         }
     }
@@ -222,7 +232,7 @@ public sealed class RumorRegistry
                     requestedKnowledge
                 ) ||
                 !RumorEligibilityPolicy
-                    .IsGeneralRumorEligible(candidate.Kind)
+                    .IsGeneralRumorEligible(candidate)
             )
             {
                 continue;
@@ -233,7 +243,44 @@ public sealed class RumorRegistry
 
         return CreateWeightedOrder(
             candidates,
-            random
+            random,
+            RumorEligibilityPolicy
+                .GetGeneralRumorCategoryKey,
+            RumorEligibilityPolicy
+                .GetGeneralRumorWeight
+        );
+    }
+
+    public List<RumorRecord>
+        CreateShuffledBetterRuinsCandidates(
+            Random random,
+            RumorKnowledgeLevel requestedKnowledge
+        )
+    {
+        List<RumorRecord> candidates = new();
+
+        foreach (RumorRecord candidate in records.Values)
+        {
+            if (
+                !CanSellAtKnowledge(
+                    candidate,
+                    requestedKnowledge
+                ) ||
+                !BetterRuinsRumorPolicy
+                    .IsDedicatedEligible(candidate)
+            )
+            {
+                continue;
+            }
+
+            candidates.Add(candidate);
+        }
+
+        return CreateWeightedOrder(
+            candidates,
+            random,
+            BetterRuinsRumorPolicy.GetCategoryKey,
+            BetterRuinsRumorPolicy.GetWeight
         );
     }
 
@@ -262,7 +309,7 @@ public sealed class RumorRegistry
                 candidate.Knowledge !=
                     RumorKnowledgeLevel.NotSold ||
                 !RumorEligibilityPolicy
-                    .IsGeneralRumorEligible(candidate.Kind) ||
+                    .IsGeneralRumorEligible(candidate) ||
                 (
                     requiredKind.HasValue &&
                     candidate.Kind != requiredKind.Value
@@ -277,7 +324,11 @@ public sealed class RumorRegistry
 
         return CreateWeightedOrder(
             candidates,
-            random
+            random,
+            RumorEligibilityPolicy
+                .GetGeneralRumorCategoryKey,
+            RumorEligibilityPolicy
+                .GetGeneralRumorWeight
         );
     }
 
@@ -354,55 +405,47 @@ public sealed class RumorRegistry
                 .GeneralRumors
                 .AllowApproximateToExactUpgrade &&
             requestedKnowledge == RumorKnowledgeLevel.Exact &&
-            record.Knowledge == RumorKnowledgeLevel.Approximate;
+            record.Knowledge ==
+                RumorKnowledgeLevel.Approximate;
     }
 
     private static List<RumorRecord> CreateWeightedOrder(
         List<RumorRecord> candidates,
-        Random random
+        Random random,
+        Func<RumorRecord, string> getCategoryKey,
+        Func<RumorRecord, int> getWeight
     )
     {
-        Dictionary<StructureKind, List<RumorRecord>> byKind =
-            new();
+        Dictionary<string, WeightedRecordGroup> groupsByKey =
+            new(StringComparer.OrdinalIgnoreCase);
 
         foreach (RumorRecord candidate in candidates)
         {
-            if (!byKind.TryGetValue(
-                    candidate.Kind,
-                    out List<RumorRecord>? kindCandidates
+            string key = getCategoryKey(candidate);
+            int weight = Math.Max(1, getWeight(candidate));
+
+            if (!groupsByKey.TryGetValue(
+                    key,
+                    out WeightedRecordGroup? group
                 ))
             {
-                kindCandidates = new List<RumorRecord>();
-                byKind.Add(candidate.Kind, kindCandidates);
+                group = new WeightedRecordGroup(
+                    key,
+                    weight
+                );
+
+                groupsByKey.Add(key, group);
             }
 
-            kindCandidates.Add(candidate);
+            group.Candidates.Add(candidate);
         }
 
-        List<WeightedKindGroup> groups = new();
+        List<WeightedRecordGroup> groups =
+            new(groupsByKey.Values);
 
-        foreach (
-            KeyValuePair<StructureKind, List<RumorRecord>> pair
-            in byKind
-        )
+        foreach (WeightedRecordGroup group in groups)
         {
-            int weight = RumorEligibilityPolicy
-                .GetGeneralRumorWeight(pair.Key);
-
-            if (weight <= 0)
-            {
-                continue;
-            }
-
-            Shuffle(pair.Value, random);
-
-            groups.Add(
-                new WeightedKindGroup(
-                    pair.Key,
-                    weight,
-                    pair.Value
-                )
-            );
+            Shuffle(group.Candidates, random);
         }
 
         List<RumorRecord> ordered = new();
@@ -411,7 +454,7 @@ public sealed class RumorRegistry
         {
             long totalWeight = 0;
 
-            foreach (WeightedKindGroup group in groups)
+            foreach (WeightedRecordGroup group in groups)
             {
                 totalWeight += group.Weight;
             }
@@ -431,7 +474,7 @@ public sealed class RumorRegistry
                 }
             }
 
-            WeightedKindGroup selectedGroup =
+            WeightedRecordGroup selectedGroup =
                 groups[selectedGroupIndex];
 
             int candidateIndex =
@@ -476,23 +519,21 @@ public sealed class RumorRegistry
         }
     }
 
-    private sealed class WeightedKindGroup
+    private sealed class WeightedRecordGroup
     {
-        public StructureKind Kind { get; }
+        public string Key { get; }
 
         public int Weight { get; }
 
-        public List<RumorRecord> Candidates { get; }
+        public List<RumorRecord> Candidates { get; } = new();
 
-        public WeightedKindGroup(
-            StructureKind kind,
-            int weight,
-            List<RumorRecord> candidates
+        public WeightedRecordGroup(
+            string key,
+            int weight
         )
         {
-            Kind = kind;
+            Key = key;
             Weight = weight;
-            Candidates = candidates;
         }
     }
 }
