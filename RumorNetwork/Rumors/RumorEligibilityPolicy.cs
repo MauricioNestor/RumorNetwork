@@ -1,4 +1,4 @@
-﻿using RumorNetwork.Configuration;
+using RumorNetwork.Configuration;
 using RumorNetwork.Structures;
 
 namespace RumorNetwork.Rumors;
@@ -24,6 +24,21 @@ public static class RumorEligibilityPolicy
             .IsStructureEnabled(kind);
     }
 
+    public static bool IsGeneralRumorEligible(
+        RumorRecord record
+    )
+    {
+        if (BetterRuinsRumorPolicy.IsBetterRuins(record))
+        {
+            return
+                IsGeneralRumorEligible(record.Kind) &&
+                BetterRuinsRumorPolicy
+                    .IsGeneralPoolEligible(record);
+        }
+
+        return IsGeneralRumorEligible(record.Kind);
+    }
+
     public static int GetGeneralRumorWeight(
         StructureKind kind
     )
@@ -31,6 +46,31 @@ public static class RumorEligibilityPolicy
         return RumorRuntimeSettings
             .GeneralRumors
             .GetWeight(kind);
+    }
+
+    public static int GetGeneralRumorWeight(
+        RumorRecord record
+    )
+    {
+        if (BetterRuinsRumorPolicy.IsBetterRuins(record))
+        {
+            return BetterRuinsRumorPolicy.GetWeight(record);
+        }
+
+        return GetGeneralRumorWeight(record.Kind);
+    }
+
+    public static string GetGeneralRumorCategoryKey(
+        RumorRecord record
+    )
+    {
+        if (BetterRuinsRumorPolicy.IsBetterRuins(record))
+        {
+            return BetterRuinsRumorPolicy
+                .GetCategoryKey(record);
+        }
+
+        return "kind:" + record.Kind;
     }
 
     public static bool IsEligible(
