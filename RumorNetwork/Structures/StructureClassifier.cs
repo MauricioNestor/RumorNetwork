@@ -6,6 +6,9 @@ namespace RumorNetwork.Structures;
 
 public static class StructureClassifier
 {
+    private const string BetterRuinsUndergroundCode =
+        "betterruins:undergroundruins";
+
     public static StructureKind Classify(
         GeneratedStructure structure
     )
@@ -17,6 +20,34 @@ public static class StructureClassifier
         string group =
             structure.Group?.ToLowerInvariant() ??
             string.Empty;
+
+        bool isBetterRuinsUnderground = string.Equals(
+            code,
+            BetterRuinsUndergroundCode,
+            StringComparison.OrdinalIgnoreCase
+        );
+
+        if (
+            isBetterRuinsUnderground &&
+            TryClassifyConfiguredExactCode(
+                code,
+                group,
+                out StructureKind exactConfiguredKind
+            )
+        )
+        {
+            return exactConfiguredKind;
+        }
+
+        if (
+            isBetterRuinsUnderground &&
+            RumorRuntimeSettings
+                .StructureClassification
+                .UseBuiltInRules
+        )
+        {
+            return StructureKind.UndergroundRuin;
+        }
 
         if (TryClassifyConfigured(
                 code,
@@ -35,15 +66,6 @@ public static class StructureClassifier
         }
 
         // More specific built-in rules first.
-        if (string.Equals(
-                code,
-                "betterruins:undergroundruins",
-                StringComparison.OrdinalIgnoreCase
-            ))
-        {
-            return StructureKind.UndergroundRuin;
-        }
-
         if (code.StartsWith("betterruins:"))
         {
             return StructureKind.BetterRuin;
@@ -110,6 +132,40 @@ public static class StructureClassifier
         }
 
         return StructureKind.Unknown;
+    }
+
+    private static bool TryClassifyConfiguredExactCode(
+        string code,
+        string group,
+        out StructureKind kind
+    )
+    {
+        foreach (
+            StructureClassificationRuleConfig rule
+            in RumorRuntimeSettings
+                .StructureClassification
+                .Rules
+        )
+        {
+            if (
+                !rule.Enabled ||
+                string.IsNullOrEmpty(rule.CodeExact) ||
+                !Matches(rule, code, group) ||
+                !Enum.TryParse(
+                    rule.Kind,
+                    true,
+                    out kind
+                )
+            )
+            {
+                continue;
+            }
+
+            return true;
+        }
+
+        kind = StructureKind.Unknown;
+        return false;
     }
 
     private static bool TryClassifyConfigured(
