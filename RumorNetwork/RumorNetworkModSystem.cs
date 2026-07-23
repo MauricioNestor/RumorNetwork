@@ -2,6 +2,7 @@ using RumorNetwork.Catalog;
 using RumorNetwork.Caves;
 using RumorNetwork.Commands;
 using RumorNetwork.Configuration;
+using RumorNetwork.Dialogue;
 using RumorNetwork.Offers;
 using RumorNetwork.Purchases;
 using RumorNetwork.Rumors;
@@ -29,6 +30,7 @@ namespace RumorNetwork
         private RumorTargetResolver rumorTargetResolver = null!;
         private RumorDeliveryService rumorDeliveryService = null!;
         private RumorPurchaseService rumorPurchaseService = null!;
+        private TranslocatorPurchaseService translocatorPurchaseService = null!;
         private RumorOfferService rumorOfferService = null!;
         private TraderLocationPurchaseService traderLocationPurchaseService = null!;
         private VerifiedStructureDiscoveryService discoveryService = null!;
@@ -99,6 +101,16 @@ namespace RumorNetwork
                 discoveryService
             );
 
+            translocatorPurchaseService =
+                new TranslocatorPurchaseService(
+                    api,
+                    rumorRegistry,
+                    rumorTargetResolver,
+                    priceResolver,
+                    paymentService,
+                    discoveryService
+                );
+
             rumorOfferService =
                 new RumorOfferService(
                     config,
@@ -120,6 +132,13 @@ namespace RumorNetwork
                     traderSelector,
                     discoveryService
                 );
+
+            RumorDialogueRuntime.Configure(
+                rumorPurchaseService,
+                translocatorPurchaseService,
+                traderLocationPurchaseService,
+                rumorRegistry
+            );
 
             api.Event.SaveGameLoaded += OnSaveGameLoaded;
             api.Event.GameWorldSave += OnGameWorldSave;
@@ -148,6 +167,7 @@ namespace RumorNetwork
 
         public override void Dispose()
         {
+            RumorDialogueRuntime.Reset();
             discoveryService?.Stop();
             base.Dispose();
         }
