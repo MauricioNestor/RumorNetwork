@@ -28,6 +28,8 @@
   "offer-trader-description": "The exact location of the closest unknown trader known by this seller.",
   "waypoint-ruins-approximate": "Rumor: Ruins - Approximate",
   "waypoint-ruins-exact": "Rumor: Ruins - Exact",
+  "waypoint-generic-approximate": "Rumor: {0} - Approximate",
+  "waypoint-generic-exact": "Rumor: {0} - Exact",
   "waypoint-translocator": "Rumor: Translocator",
   "waypoint-trader": "Rumor: Trader",
   "message-general-disabled": "General rumors are disabled in the configuration.",
