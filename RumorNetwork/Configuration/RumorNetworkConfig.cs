@@ -220,25 +220,26 @@ namespace RumorNetwork.Configuration
     {
         public bool Enabled = true;
 
-        // Legacy backfill settings are retained so old config files and
-        // the retired scanner remain binary/source compatible.
         public bool ScanOnPlayerReady = false;
 
-        public int BackfillRadiusRegions = 24;
-
-        public int ConcurrentRegionChecks = 4;
-
-        // Verified discovery settings.
+        // Delay between starting peeks. This is the main sustained CPU
+        // throttle. Peeks already running are not interrupted.
         public int PeekIntervalMs = 250;
 
+        // Keep this low: each peek performs temporary world generation.
         public int MaxConcurrentPeeks = 1;
 
+        // Hard per-search CPU/work budget.
         public int MaxPeekColumnsPerSearch = 2048;
 
+        // Geometric limit around the seller/player, in chunk columns.
         public int MaxSearchRadiusChunks = 96;
 
+        // Give normal player-driven worldgen priority.
         public int PauseWhenGeneratingChunksAbove = 8;
 
+        // Stop as soon as this many new verified targets of the requested
+        // kind have entered the registry.
         public int StopAfterNewTargets = 1;
 
         public static RemoteStructureCatalogConfig
@@ -249,21 +250,6 @@ namespace RumorNetwork.Configuration
 
         public void Normalize()
         {
-            if (BackfillRadiusRegions <= 0)
-            {
-                BackfillRadiusRegions = 24;
-            }
-
-            if (ConcurrentRegionChecks <= 0)
-            {
-                ConcurrentRegionChecks = 4;
-            }
-
-            if (ConcurrentRegionChecks > 16)
-            {
-                ConcurrentRegionChecks = 16;
-            }
-
             if (PeekIntervalMs < 25)
             {
                 PeekIntervalMs = 25;
