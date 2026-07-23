@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
-using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Server;
 using Vintagestory.API.Util;
@@ -156,7 +155,7 @@ namespace RumorNetwork.Dialogue
                 Id = nextId++,
                 Value =
                     "Do you know any other traders around?",
-                JumpTo = "rumornetwork-buytrader"
+                JumpTo = "rumornetwork-root-traders"
             });
 
             rootAnswers.Add(new DialogeTextElement
@@ -227,6 +226,23 @@ namespace RumorNetwork.Dialogue
         {
             return new DialogueComponent[]
             {
+                NpcTalk(
+                    "rumornetwork-root-traders",
+                    "One of my colleagues may be stationed nearby. I can mark their location on your map for four rusty gears.",
+                    "rumornetwork-trader-options"
+                ),
+                PlayerTalk(
+                    "rumornetwork-trader-options",
+                    ref nextId,
+                    (
+                        "I'll pay four rusty gears.",
+                        "rumornetwork-buytrader"
+                    ),
+                    (
+                        "I don't have that many gears.",
+                        rootCode
+                    )
+                ),
                 Action(
                     "rumornetwork-buytrader",
                     "buytrader"
@@ -457,24 +473,15 @@ namespace RumorNetwork.Dialogue
 
             handled = EnumHandling.PreventDefault;
 
-            if (__instance.entity.Api is not ICoreClientAPI capi)
-            {
-                return false;
-            }
-
             string responseCode =
                 SerializerUtil.Deserialize<string>(data);
 
-            if (
-                __instance.ControllerByPlayer.TryGetValue(
-                    capi.World.Player.PlayerUID,
-                    out DialogueController? controller
-                )
-            )
-            {
-                controller.JumpTo(responseCode);
-            }
+            DialogueController? controller =
+                __instance.ControllerByPlayer
+                    .Values
+                    .FirstOrDefault();
 
+            controller?.JumpTo(responseCode);
             return false;
         }
     }
@@ -484,7 +491,7 @@ namespace RumorNetwork.Dialogue
     {
         public string Action { get; set; } = string.Empty;
 
-        public override string? Execute()
+        public override string Execute()
         {
             if (
                 controller.NPCEntity.Api is not ICoreServerAPI sapi ||
