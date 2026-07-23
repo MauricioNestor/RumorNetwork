@@ -17,6 +17,12 @@ namespace RumorNetwork.Dialogue
         private const string HarmonyId =
             "rumornetwork.trader-dialogue";
 
+        private const string TraderRootCode =
+            "rumornetwork-root-traders";
+
+        private const string RumorRootCode =
+            "rumornetwork-root-rumors";
+
         private Harmony? harmony;
 
         public override double ExecuteOrder()
@@ -112,14 +118,6 @@ namespace RumorNetwork.Dialogue
             DialogueComponent[] existing =
                 __result.components;
 
-            if (existing.Any(component =>
-                    component.Code ==
-                    "rumornetwork-root-traders"
-                ))
-            {
-                return;
-            }
-
             DlgTalkComponent? root =
                 FindTradingRoot(existing);
 
@@ -128,63 +126,88 @@ namespace RumorNetwork.Dialogue
                 return;
             }
 
-            int nextId = existing
-                .OfType<DlgTalkComponent>()
-                .SelectMany(component =>
-                    component.Text ??
-                    Array.Empty<DialogeTextElement>()
-                )
-                .Select(element => element.Id)
-                .DefaultIfEmpty(-1)
-                .Max() + 1;
+            bool traderChoiceExists =
+                HasChoice(root, TraderRootCode);
 
-            List<DialogeTextElement> rootAnswers =
-                new(
-                    root.Text ??
-                    Array.Empty<DialogeTextElement>()
-                );
+            bool rumorChoiceExists =
+                HasChoice(root, RumorRootCode);
 
-            rootAnswers.Add(new DialogeTextElement
+            bool traderBranchExists =
+                HasComponent(existing, TraderRootCode);
+
+            bool rumorBranchExists =
+                HasComponent(existing, RumorRootCode);
+
+            if (
+                traderChoiceExists &&
+                rumorChoiceExists &&
+                traderBranchExists &&
+                rumorBranchExists
+            )
             {
-                Id = nextId++,
-                Value =
-                    "Do you know any other traders around?",
-                JumpTo = "rumornetwork-root-traders"
-            });
+                return;
+            }
 
-            rootAnswers.Add(new DialogeTextElement
-            {
-                Id = nextId++,
-                Value =
-                    "Have you heard any rumors lately?",
-                JumpTo = "rumornetwork-root-rumors"
-            });
+            int nextId = FindNextAnswerId(existing);
 
-            root.Text = rootAnswers.ToArray();
+            AppendRootChoices(
+                root,
+                ref nextId,
+                traderChoiceExists,
+                rumorChoiceExists
+            );
 
             List<DialogueComponent> additions = new();
 
-            additions.AddRange(
-                CreateTraderBranch(root.Code)
-            );
+            if (!traderBranchExists)
+            {
+                additions.AddRange(
+                    CreateTraderBranch(root.Code)
+                );
+            }
 
-            additions.AddRange(
-                CreateRumorBranch(root.Code)
-            );
+            if (!rumorBranchExists)
+            {
+                additions.AddRange(
+                    CreateRumorBranch(root.Code)
+                );
+            }
 
             foreach (DialogueComponent component in additions)
             {
                 component.Init(ref nextId);
             }
 
-            __result.components = existing
-                .Concat(additions)
-                .ToArray();
+            if (additions.Count > 0)
+            {
+                __result.components = existing
+                    .Concat(additions)
+                    .ToArray();
+            }
 
             Console.WriteLine(
                 "Rumor Network injetou opções de rumores no " +
                 $"diálogo {loc}."
             );
+        }
+
+        internal static bool IsTradingRoot(
+            DlgTalkComponent component
+        )
+        {
+            return
+                string.Equals(
+                    component.Owner,
+                    "player",
+                    StringComparison.OrdinalIgnoreCase
+                ) &&
+                component.Text?.Any(answer =>
+                    string.Equals(
+                        answer.JumpTo,
+                        "opentrade",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                ) == true;
         }
 
         private static DlgTalkComponent? FindTradingRoot(
@@ -193,12 +216,92 @@ namespace RumorNetwork.Dialogue
         {
             return components
                 .OfType<DlgTalkComponent>()
-                .FirstOrDefault(component =>
-                    component.Owner == "player" &&
-                    component.Text?.Any(answer =>
-                        answer.JumpTo == "opentrade"
-                    ) == true
-                );
+                .FirstOrDefault(IsTradingRoot);
+        }
+
+        private static bool HasComponent(
+            IEnumerable<DialogueComponent> components,
+            string code
+        )
+        {
+            return components.Any(component =>
+                string.Equals(
+                    component.Code,
+                    code,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            );
+        }
+
+        private static bool HasChoice(
+            DlgTalkComponent component,
+            string jumpTo
+        )
+        {
+            return component.Text?.Any(answer =>
+                string.Equals(
+                    answer.JumpTo,
+                    jumpTo,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            ) == true;
+        }
+
+        private static int FindNextAnswerId(
+            IEnumerable<DialogueComponent> components
+        )
+        {
+            return components
+                .OfType<DlgTalkComponent>()
+                .SelectMany(component =>
+                    component.Text ??
+                    Array.Empty<DialogeTextElement>()
+                )
+                .Select(element => element.Id)
+                .DefaultIfEmpty(-1)
+                .Max() + 1;
+        }
+
+        private static void AppendRootChoices(
+            DlgTalkComponent root,
+            ref int nextId,
+            bool traderChoiceExists,
+            bool rumorChoiceExists
+        )
+        {
+            if (traderChoiceExists && rumorChoiceExists)
+            {
+                return;
+            }
+
+            List<DialogeTextElement> answers = new(
+                root.Text ??
+                Array.Empty<DialogeTextElement>()
+            );
+
+            if (!traderChoiceExists)
+            {
+                answers.Add(new DialogeTextElement
+                {
+                    Id = nextId++,
+                    Value =
+                        "Do you know any other traders around?",
+                    JumpTo = TraderRootCode
+                });
+            }
+
+            if (!rumorChoiceExists)
+            {
+                answers.Add(new DialogeTextElement
+                {
+                    Id = nextId++,
+                    Value =
+                        "Have you heard any rumors lately?",
+                    JumpTo = RumorRootCode
+                });
+            }
+
+            root.Text = answers.ToArray();
         }
 
         private static IEnumerable<DialogueComponent>
@@ -207,7 +310,7 @@ namespace RumorNetwork.Dialogue
             return new DialogueComponent[]
             {
                 NpcTalk(
-                    "rumornetwork-root-traders",
+                    TraderRootCode,
                     "One of my colleagues may be stationed nearby. I can mark their location on your map for four rusty gears.",
                     "rumornetwork-trader-options"
                 ),
@@ -260,7 +363,7 @@ namespace RumorNetwork.Dialogue
             return new DialogueComponent[]
             {
                 NpcTalk(
-                    "rumornetwork-root-rumors",
+                    RumorRootCode,
                     "Certainly. But useful information has a price.",
                     "rumornetwork-rumor-options"
                 ),
@@ -492,7 +595,7 @@ namespace RumorNetwork.Dialogue
                 SerializerUtil.Serialize(responseCode)
             );
 
-            return null;
+            return responseCode;
         }
     }
 }
