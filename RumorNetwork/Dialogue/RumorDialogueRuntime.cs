@@ -11,24 +11,28 @@ namespace RumorNetwork.Dialogue
     public static class RumorDialogueRuntime
     {
         private static RumorPurchaseService? rumorPurchaseService;
+        private static BetterRuinsPurchaseService? betterRuinsPurchaseService;
         private static TranslocatorPurchaseService? translocatorPurchaseService;
         private static TraderLocationPurchaseService? traderPurchaseService;
         private static RumorRegistry? rumorRegistry;
 
         public static bool Ready =>
             rumorPurchaseService != null &&
+            betterRuinsPurchaseService != null &&
             translocatorPurchaseService != null &&
             traderPurchaseService != null &&
             rumorRegistry != null;
 
         public static void Configure(
             RumorPurchaseService rumorPurchases,
+            BetterRuinsPurchaseService betterRuinsPurchases,
             TranslocatorPurchaseService translocatorPurchases,
             TraderLocationPurchaseService traderPurchases,
             RumorRegistry registry
         )
         {
             rumorPurchaseService = rumorPurchases;
+            betterRuinsPurchaseService = betterRuinsPurchases;
             translocatorPurchaseService = translocatorPurchases;
             traderPurchaseService = traderPurchases;
             rumorRegistry = registry;
@@ -37,6 +41,7 @@ namespace RumorNetwork.Dialogue
         public static void Reset()
         {
             rumorPurchaseService = null;
+            betterRuinsPurchaseService = null;
             translocatorPurchaseService = null;
             traderPurchaseService = null;
             rumorRegistry = null;
@@ -73,6 +78,9 @@ namespace RumorNetwork.Dialogue
                             player,
                             RumorKnowledgeLevel.Exact
                         ),
+
+                    "buybetterruins" =>
+                        BuyBetterRuins(player),
 
                     "buytranslocator" =>
                         BuyTranslocator(player),
@@ -198,6 +206,31 @@ namespace RumorNetwork.Dialogue
                 return knowledge == RumorKnowledgeLevel.Approximate
                     ? "approximate"
                     : "exact";
+            }
+
+            player.SendMessage(
+                GlobalConstants.GeneralChatGroup,
+                error,
+                EnumChatType.Notification
+            );
+
+            return ClassifyGeneralFailure(error);
+        }
+
+        private static string BuyBetterRuins(
+            IServerPlayer player
+        )
+        {
+            bool purchased =
+                betterRuinsPurchaseService!.TryPurchase(
+                    player,
+                    out RumorPurchaseResult? result,
+                    out string error
+                );
+
+            if (purchased && result != null)
+            {
+                return "betterruins";
             }
 
             player.SendMessage(
