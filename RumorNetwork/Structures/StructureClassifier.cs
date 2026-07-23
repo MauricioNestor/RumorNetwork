@@ -35,6 +35,15 @@ public static class StructureClassifier
         }
 
         // More specific built-in rules first.
+        if (string.Equals(
+                code,
+                "betterruins:undergroundruins",
+                StringComparison.OrdinalIgnoreCase
+            ))
+        {
+            return StructureKind.UndergroundRuin;
+        }
+
         if (code.StartsWith("betterruins:"))
         {
             return StructureKind.BetterRuin;
