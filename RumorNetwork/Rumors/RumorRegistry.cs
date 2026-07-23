@@ -22,9 +22,6 @@ public sealed class RumorRegistry
 
         foreach (RumorSite site in sites)
         {
-            // Vanilla "gates" are translocator structures. They are
-            // admitted only after a real BlockStaticTranslocator is found
-            // and are then stored as StructureKind.Translocator.
             if (site.Kind == StructureKind.Gate)
             {
                 continue;
@@ -127,6 +124,52 @@ public sealed class RumorRegistry
         return idsToRemove.Count;
     }
 
+    public int RemoveNear(
+        StructureKind kind,
+        int x,
+        int y,
+        int z,
+        int radius
+    )
+    {
+        long radiusSquared = (long)radius * radius;
+        List<string> idsToRemove = new();
+
+        foreach (
+            KeyValuePair<string, RumorRecord> pair
+            in records
+        )
+        {
+            RumorRecord record = pair.Value;
+
+            if (record.Kind != kind)
+            {
+                continue;
+            }
+
+            var center = record.CreateLocation().Center;
+            long deltaX = center.X - x;
+            long deltaY = center.Y - y;
+            long deltaZ = center.Z - z;
+            long distanceSquared =
+                deltaX * deltaX +
+                deltaY * deltaY +
+                deltaZ * deltaZ;
+
+            if (distanceSquared <= radiusSquared)
+            {
+                idsToRemove.Add(pair.Key);
+            }
+        }
+
+        foreach (string id in idsToRemove)
+        {
+            records.Remove(id);
+        }
+
+        return idsToRemove.Count;
+    }
+
     public RumorRegistrySaveData Export()
     {
         return new RumorRegistrySaveData
@@ -168,21 +211,39 @@ public sealed class RumorRegistry
             Random random
         )
     {
+        return CreateShuffledNotSoldCandidates(
+            random,
+            null
+        );
+    }
+
+    public List<RumorRecord>
+        CreateShuffledNotSoldCandidates(
+            Random random,
+            StructureKind? requiredKind
+        )
+    {
         List<RumorRecord> candidates = new();
 
         foreach (RumorRecord candidate in records.Values)
         {
             if (
-                candidate.Knowledge
-                == RumorKnowledgeLevel.NotSold &&
-                RumorEligibilityPolicy
+                candidate.Knowledge !=
+                    RumorKnowledgeLevel.NotSold ||
+                !RumorEligibilityPolicy
                     .IsGeneralRumorEligible(
                         candidate.Kind
-                    )
+                    ) ||
+                (
+                    requiredKind.HasValue &&
+                    candidate.Kind != requiredKind.Value
+                )
             )
             {
-                candidates.Add(candidate);
+                continue;
             }
+
+            candidates.Add(candidate);
         }
 
         for (
