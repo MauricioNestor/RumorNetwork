@@ -14,5 +14,9 @@ namespace RumorNetwork.Configuration
         {
             return new RumorDebugConfig();
         }
+
+        public void Normalize()
+        {
+        }
     }
 }
