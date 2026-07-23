@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using RumorNetwork.Catalog;
+using RumorNetwork.Configuration;
+using RumorNetwork.Dialogue;
 using RumorNetwork.Rumors;
 using Vintagestory.API.Server;
 
@@ -39,6 +41,16 @@ namespace RumorNetwork.Purchases
         {
             result = null;
             error = string.Empty;
+
+            if (!RumorRuntimeSettings
+                    .GeneralRumors
+                    .TranslocatorEnabled)
+            {
+                error = RumorText.Get(
+                    "message-translocator-disabled"
+                );
+                return false;
+            }
 
             discoveryService.RequestAdditional(
                 StructureKind.Translocator,
