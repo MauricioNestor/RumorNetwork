@@ -45,6 +45,85 @@ namespace RumorNetwork.Traders
             this.discoveryService = discoveryService;
         }
 
+        public string CheckAvailability(
+            IServerPlayer player
+        )
+        {
+            if (!config.TraderLocations.Enabled)
+            {
+                return "none";
+            }
+
+            Vec3d playerPosition = new(
+                player.Entity.Pos.X,
+                player.Entity.Pos.Y,
+                player.Entity.Pos.Z
+            );
+
+            bool sellerFound =
+                selector.TryFindSeller(
+                    playerPosition,
+                    config.TraderLocations
+                        .SellerMatchRadius,
+                    out RumorRecord? seller,
+                    out _
+                );
+
+            if (!sellerFound || seller == null)
+            {
+                discoveryService.RequestAdditional(
+                    StructureKind.Trader,
+                    (int)player.Entity.Pos.X,
+                    (int)player.Entity.Pos.Z
+                );
+
+                return "searching";
+            }
+
+            Vec3i sellerCenter =
+                seller.CreateLocation().Center;
+
+            PlayerTraderKnowledge knowledge =
+                knowledgeRegistry.GetOrCreate(
+                    player.PlayerUID
+                );
+
+            knowledge.MarkVisited(seller.Id);
+
+            int sellerPurchaseLimit =
+                config.TraderLocations
+                    .MaxLocationsSoldPerTrader;
+
+            if (!knowledge.CanPurchaseFromSeller(
+                    seller.Id,
+                    sellerPurchaseLimit
+                ))
+            {
+                return "quota";
+            }
+
+            bool targetFound =
+                selector.TryFindNearestUnknown(
+                    seller,
+                    knowledge,
+                    out _,
+                    out _
+                );
+
+            if (targetFound)
+            {
+                return "available";
+            }
+
+            discoveryService.RequestAdditional(
+                StructureKind.Trader,
+                sellerCenter.X,
+                sellerCenter.Z
+            );
+
+            return "none";
+        }
+
         public bool TryPurchase(
             IServerPlayer player,
             out TraderLocationPurchaseResult? result,
