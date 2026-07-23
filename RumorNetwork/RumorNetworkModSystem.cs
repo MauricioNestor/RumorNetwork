@@ -38,7 +38,10 @@ namespace RumorNetwork
         private CaveBoundaryScanner caveBoundaryScanner = null!;
         private CaveSkyConnectionSearch caveSkyConnectionSearch = null!;
 
-        private int RegionSearchRadius { get; set; } = 1;
+        private int RegionSearchRadius =>
+            RumorRuntimeSettings
+                .GeneralRumors
+                .LocalRegionSearchRadius;
 
         public override void StartServerSide(ICoreServerAPI api)
         {
