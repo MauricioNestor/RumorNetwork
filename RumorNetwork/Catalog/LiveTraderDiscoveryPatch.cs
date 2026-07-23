@@ -50,9 +50,9 @@ namespace RumorNetwork.Catalog
                 new[] { typeof(ICoreServerAPI) }
             );
 
-            MethodInfo? traderInitialize = AccessTools.Method(
-                typeof(EntityTrader),
-                nameof(EntityTrader.Initialize),
+            MethodInfo? entityInitialize = AccessTools.Method(
+                typeof(Entity),
+                nameof(Entity.Initialize),
                 new[]
                 {
                     typeof(EntityProperties),
@@ -77,20 +77,20 @@ namespace RumorNetwork.Catalog
                 );
             }
 
-            if (traderInitialize != null)
+            if (entityInitialize != null)
             {
                 harmony.Patch(
-                    traderInitialize,
+                    entityInitialize,
                     postfix: new HarmonyMethod(
                         typeof(LiveTraderDiscoveryPatch),
-                        nameof(RegisterInitializedTrader)
+                        nameof(RegisterInitializedEntity)
                     )
                 );
             }
             else
             {
                 api.Logger.Warning(
-                    "Rumor Network não encontrou EntityTrader.Initialize; " +
+                    "Rumor Network não encontrou Entity.Initialize; " +
                     "traders vivos serão registrados apenas ao conversar."
                 );
             }
@@ -126,11 +126,14 @@ namespace RumorNetwork.Catalog
                 .GetValue<RumorRegistry>();
         }
 
-        private static void RegisterInitializedTrader(
-            EntityTrader __instance
+        private static void RegisterInitializedEntity(
+            Entity __instance
         )
         {
-            Register(__instance);
+            if (__instance is EntityTrader trader)
+            {
+                Register(trader);
+            }
         }
 
         private static void RegisterInteractingTrader(
