@@ -27,6 +27,7 @@ namespace RumorNetwork
         private RumorOfferService rumorOfferService = null!;
         private TraderLocationPurchaseService traderLocationPurchaseService = null!;
         private SelectiveStructureCatalogService selectiveCatalogService = null!;
+        private ProgressiveStructureCatalogSearchService progressiveCatalogSearchService = null!;
         private CaveCellClassifier caveCellClassifier = null!;
         private CaveBoundaryScanner caveBoundaryScanner = null!;
         private CaveSkyConnectionSearch caveSkyConnectionSearch = null!;
@@ -38,7 +39,6 @@ namespace RumorNetwork
             serverApi = api;
 
             RumorNetworkConfig config = RumorConfigLoader.Load(api, Mod.Logger);
-
             caveCellClassifier = new CaveCellClassifier(api.World.BlockAccessor);
             caveBoundaryScanner = new CaveBoundaryScanner(api.World.BlockAccessor, caveCellClassifier);
             caveSkyConnectionSearch = new CaveSkyConnectionSearch(api.World.BlockAccessor, caveCellClassifier);
@@ -61,6 +61,15 @@ namespace RumorNetwork
                 config.RemoteCatalog
             );
 
+            progressiveCatalogSearchService =
+                new ProgressiveStructureCatalogSearchService(
+                    api,
+                    Mod.Logger,
+                    rumorRegistry,
+                    selectiveCatalogService,
+                    config.RemoteCatalog
+                );
+
             rumorPurchaseService = new RumorPurchaseService(
                 rumorDeliveryService,
                 priceResolver,
@@ -80,7 +89,8 @@ namespace RumorNetwork
                 paymentService,
                 traderKnowledgeRegistry,
                 traderSelector,
-                selectiveCatalogService
+                selectiveCatalogService,
+                progressiveCatalogSearchService
             );
 
             api.Event.SaveGameLoaded += OnSaveGameLoaded;
@@ -108,6 +118,7 @@ namespace RumorNetwork
 
         public override void Dispose()
         {
+            progressiveCatalogSearchService?.Stop();
             selectiveCatalogService?.Stop();
             base.Dispose();
         }
@@ -132,6 +143,7 @@ namespace RumorNetwork
             );
             selectiveCatalogService.Import(catalogSaveData);
             selectiveCatalogService.Start();
+            progressiveCatalogSearchService.Start();
 
             Mod.Logger.Notification(
                 $"Rumor Network carregou {rumorRegistry.Count} rumores persistidos."
