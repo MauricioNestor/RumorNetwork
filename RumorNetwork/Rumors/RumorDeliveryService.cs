@@ -90,10 +90,10 @@ namespace RumorNetwork.Rumors
             }
 
             List<RumorRecord> candidates =
-                rumorRegistry
-                    .CreateShuffledNotSoldCandidates(
-                        api.World.Rand
-                    );
+                rumorRegistry.CreateShuffledCandidates(
+                    api.World.Rand,
+                    knowledge
+                );
 
             if (candidates.Count == 0)
             {
@@ -177,10 +177,17 @@ namespace RumorNetwork.Rumors
             RumorRecord record =
                 preparedDelivery.Record;
 
-            if (
-                record.Knowledge
-                != RumorKnowledgeLevel.NotSold
-            )
+            bool canCommit =
+                record.Knowledge ==
+                    RumorKnowledgeLevel.NotSold ||
+                (
+                    preparedDelivery.Knowledge ==
+                        RumorKnowledgeLevel.Exact &&
+                    record.Knowledge ==
+                        RumorKnowledgeLevel.Approximate
+                );
+
+            if (!canCommit)
             {
                 error =
                     "O rumor preparado já foi vendido.";
