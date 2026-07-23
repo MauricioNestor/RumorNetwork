@@ -50,6 +50,8 @@ namespace RumorNetwork
                     Mod.Logger
                 );
 
+            RumorRuntimeSettings.Configure(config);
+
             caveCellClassifier =
                 new CaveCellClassifier(
                     api.World.BlockAccessor
