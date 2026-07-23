@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using RumorNetwork.Configuration;
 using Vintagestory.API.Common;
 
@@ -6,8 +6,13 @@ namespace RumorNetwork.Structures;
 
 public static class StructureClassifier
 {
+    private const string BetterRuinsPrefix = "betterruins:";
+
     private const string BetterRuinsUndergroundCode =
         "betterruins:undergroundruins";
+
+    private const string BetterRuinsGatesCode =
+        "betterruins:gates";
 
     public static StructureKind Classify(
         GeneratedStructure structure
@@ -21,14 +26,33 @@ public static class StructureClassifier
             structure.Group?.ToLowerInvariant() ??
             string.Empty;
 
+        bool isBetterRuins = code.StartsWith(
+            BetterRuinsPrefix,
+            StringComparison.OrdinalIgnoreCase
+        );
+
         bool isBetterRuinsUnderground = string.Equals(
             code,
             BetterRuinsUndergroundCode,
             StringComparison.OrdinalIgnoreCase
         );
 
+        bool isBetterRuinsGates = string.Equals(
+            code,
+            BetterRuinsGatesCode,
+            StringComparison.OrdinalIgnoreCase
+        );
+
+        bool isBetterRuinsStory =
+            isBetterRuins &&
+            string.Equals(
+                group,
+                "storystructure",
+                StringComparison.OrdinalIgnoreCase
+            );
+
         if (
-            isBetterRuinsUnderground &&
+            isBetterRuins &&
             TryClassifyConfiguredExactCode(
                 code,
                 group,
@@ -37,6 +61,21 @@ public static class StructureClassifier
         )
         {
             return exactConfiguredKind;
+        }
+
+        if (
+            isBetterRuinsStory &&
+            RumorRuntimeSettings
+                .BetterRuins
+                .ExcludeStoryStructures
+        )
+        {
+            return StructureKind.StoryStructure;
+        }
+
+        if (isBetterRuinsGates)
+        {
+            return StructureKind.Gate;
         }
 
         if (
@@ -66,7 +105,7 @@ public static class StructureClassifier
         }
 
         // More specific built-in rules first.
-        if (code.StartsWith("betterruins:"))
+        if (isBetterRuins)
         {
             return StructureKind.BetterRuin;
         }
