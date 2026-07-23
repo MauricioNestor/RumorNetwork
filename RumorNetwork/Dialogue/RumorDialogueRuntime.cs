@@ -56,17 +56,29 @@ namespace RumorNetwork.Dialogue
             {
                 return action switch
                 {
-                    "buytrader" => BuyTrader(player),
-                    "buyapproximate" => BuyGeneral(
-                        player,
-                        RumorKnowledgeLevel.Approximate
-                    ),
-                    "buyexact" => BuyGeneral(
-                        player,
-                        RumorKnowledgeLevel.Exact
-                    ),
-                    "buytranslocator" => BuyTranslocator(player),
-                    _ => "unavailable"
+                    "checktrader" =>
+                        CheckTrader(player),
+
+                    "buytrader" =>
+                        BuyTrader(player),
+
+                    "buyapproximate" =>
+                        BuyGeneral(
+                            player,
+                            RumorKnowledgeLevel.Approximate
+                        ),
+
+                    "buyexact" =>
+                        BuyGeneral(
+                            player,
+                            RumorKnowledgeLevel.Exact
+                        ),
+
+                    "buytranslocator" =>
+                        BuyTranslocator(player),
+
+                    _ =>
+                        "unavailable"
                 };
             }
             catch (Exception exception)
@@ -95,6 +107,14 @@ namespace RumorNetwork.Dialogue
             );
         }
 
+        private static string CheckTrader(
+            IServerPlayer player
+        )
+        {
+            return traderPurchaseService!
+                .CheckAvailability(player);
+        }
+
         private static string BuyTrader(
             IServerPlayer player
         )
@@ -117,20 +137,42 @@ namespace RumorNetwork.Dialogue
                 EnumChatType.Notification
             );
 
-            if (error.Contains("ampliando", StringComparison.OrdinalIgnoreCase) ||
-                error.Contains("aguarde", StringComparison.OrdinalIgnoreCase) ||
-                error.Contains("busca", StringComparison.OrdinalIgnoreCase))
+            if (
+                error.Contains(
+                    "ampliando",
+                    StringComparison.OrdinalIgnoreCase
+                ) ||
+                error.Contains(
+                    "aguarde",
+                    StringComparison.OrdinalIgnoreCase
+                ) ||
+                error.Contains(
+                    "busca",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
             {
                 return "searching";
             }
 
-            if (error.Contains("já vendeu", StringComparison.OrdinalIgnoreCase))
+            if (error.Contains(
+                    "já vendeu",
+                    StringComparison.OrdinalIgnoreCase
+                ))
             {
                 return "quota";
             }
 
-            if (error.Contains("pagamento", StringComparison.OrdinalIgnoreCase) ||
-                error.Contains("possui", StringComparison.OrdinalIgnoreCase))
+            if (
+                error.Contains(
+                    "pagamento",
+                    StringComparison.OrdinalIgnoreCase
+                ) ||
+                error.Contains(
+                    "possui",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
             {
                 return "nofunds";
             }
@@ -196,14 +238,30 @@ namespace RumorNetwork.Dialogue
             string error
         )
         {
-            if (error.Contains("Peeks", StringComparison.OrdinalIgnoreCase) ||
-                error.Contains("procurando", StringComparison.OrdinalIgnoreCase))
+            if (
+                error.Contains(
+                    "Peeks",
+                    StringComparison.OrdinalIgnoreCase
+                ) ||
+                error.Contains(
+                    "procurando",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
             {
                 return "searching";
             }
 
-            if (error.Contains("pagamento", StringComparison.OrdinalIgnoreCase) ||
-                error.Contains("possui", StringComparison.OrdinalIgnoreCase))
+            if (
+                error.Contains(
+                    "pagamento",
+                    StringComparison.OrdinalIgnoreCase
+                ) ||
+                error.Contains(
+                    "possui",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
             {
                 return "nofunds";
             }
