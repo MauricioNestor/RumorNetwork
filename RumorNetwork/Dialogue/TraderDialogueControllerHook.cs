@@ -2,10 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using HarmonyLib;
-using Vintagestory.API.Common;
-using Vintagestory.API.Datastructures;
 using Vintagestory.GameContent;
 
 namespace RumorNetwork.Dialogue
@@ -15,27 +12,22 @@ namespace RumorNetwork.Dialogue
         private const string HarmonyId =
             "rumornetwork.trader-dialogue-controller-hook";
 
-        private static readonly ConditionalWeakTable<
-            EntityBehaviorConversable,
-            object
-        > RegisteredBehaviors = new();
+        private const string TraderRootCode =
+            "rumornetwork-root-traders";
 
-        private static readonly FieldInfo? EntityField =
+        private const string RumorRootCode =
+            "rumornetwork-root-rumors";
+
+        private static readonly FieldInfo? ComponentControllerField =
             AccessTools.Field(
-                typeof(EntityBehavior),
-                "entity"
+                typeof(DialogueComponent),
+                "controller"
             );
 
-        private static readonly FieldInfo? BehaviorDialogueField =
+        private static readonly FieldInfo? ComponentDialogField =
             AccessTools.Field(
-                typeof(EntityBehaviorConversable),
-                "dialogue"
-            );
-
-        private static readonly FieldInfo? DialogueLocationField =
-            AccessTools.Field(
-                typeof(EntityBehaviorConversable),
-                "dialogueLoc"
+                typeof(DialogueComponent),
+                "dialog"
             );
 
         private static readonly FieldInfo? ControllerDialogueField =
@@ -67,32 +59,27 @@ namespace RumorNetwork.Dialogue
         {
             harmony = new Harmony(HarmonyId);
 
-            MethodInfo? initialize = AccessTools.Method(
-                typeof(EntityBehaviorConversable),
-                nameof(EntityBehaviorConversable.Initialize),
-                new[]
-                {
-                    typeof(EntityProperties),
-                    typeof(JsonObject)
-                }
+            MethodInfo? execute = AccessTools.Method(
+                typeof(DlgTalkComponent),
+                nameof(DlgTalkComponent.Execute)
             );
 
-            if (initialize == null)
+            if (execute == null)
             {
                 api.Logger.Error(
                     "Rumor Network não encontrou " +
-                    "EntityBehaviorConversable.Initialize; " +
-                    "não será possível assinar OnControllerCreated."
+                    "DlgTalkComponent.Execute; as opções de rumores " +
+                    "não poderão ser anexadas ao menu exibido."
                 );
 
                 return;
             }
 
             harmony.Patch(
-                initialize,
-                postfix: new HarmonyMethod(
+                execute,
+                prefix: new HarmonyMethod(
                     typeof(TraderDialogueControllerHook),
-                    nameof(AfterConversableInitialized)
+                    nameof(BeforeTalkComponentExecutes)
                 )
             );
         }
@@ -104,137 +91,171 @@ namespace RumorNetwork.Dialogue
             base.Dispose();
         }
 
-        private static void AfterConversableInitialized(
-            EntityBehaviorConversable __instance
+        private static void BeforeTalkComponentExecutes(
+            DlgTalkComponent __instance
         )
         {
-            Entity? entity = EntityField?.GetValue(__instance) as Entity;
-
-            if (entity is not EntityTradingHumanoid)
+            if (!string.Equals(
+                    __instance.Owner,
+                    "player",
+                    StringComparison.OrdinalIgnoreCase
+                ))
             {
                 return;
             }
 
-            if (RegisteredBehaviors.TryGetValue(__instance, out _))
-            {
-                return;
-            }
-
-            RegisteredBehaviors.Add(__instance, new object());
-
-            __instance.OnControllerCreated += controller =>
-                InjectIntoController(__instance, controller);
-        }
-
-        private static void InjectIntoController(
-            EntityBehaviorConversable behavior,
-            DialogueController controller
-        )
-        {
             if (
-                controller == null ||
-                controller.NPCEntity is not EntityTradingHumanoid ||
-                BehaviorDialogueField == null ||
+                ComponentControllerField == null ||
                 ControllerDialogueField == null
             )
             {
                 return;
             }
 
-            DialogueConfig? config =
-                BehaviorDialogueField.GetValue(behavior)
-                    as DialogueConfig;
+            DialogueController? controller =
+                ComponentControllerField.GetValue(__instance)
+                    as DialogueController;
 
-            DialogueComponent[]? existing =
-                config?.components ??
+            if (
+                controller?.NPCEntity is not EntityTradingHumanoid ||
                 ControllerDialogueField.GetValue(controller)
-                    as DialogueComponent[];
-
-            if (existing == null || existing.Length == 0)
+                    is not DialogueComponent[] existing ||
+                existing.Length == 0
+            )
             {
-                controller.NPCEntity.Api.Logger.Warning(
-                    "Rumor Network recebeu um DialogueController sem " +
-                    $"componentes para {controller.NPCEntity.Code}."
-                );
-
                 return;
             }
 
-            if (!existing.Any(component =>
-                    component.Code ==
-                    "rumornetwork-root-traders"
-                ))
+            bool menuAlreadyLinked =
+                HasRumorChoices(__instance);
+
+            bool traderBranchExists = existing.Any(component =>
+                string.Equals(
+                    component.Code,
+                    TraderRootCode,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            );
+
+            bool rumorBranchExists = existing.Any(component =>
+                string.Equals(
+                    component.Code,
+                    RumorRootCode,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            );
+
+            if (
+                menuAlreadyLinked &&
+                traderBranchExists &&
+                rumorBranchExists
+            )
             {
-                if (!TryInjectComponents(
-                        existing,
-                        out DialogueComponent[] combined,
-                        out string failure
+                return;
+            }
+
+            int nextId = FindNextAnswerId(existing);
+
+            if (!menuAlreadyLinked)
+            {
+                AppendRootChoices(
+                    __instance,
+                    ref nextId
+                );
+            }
+
+            List<DialogueComponent> additions = new();
+
+            if (!traderBranchExists)
+            {
+                if (!TryCreateBranch(
+                        CreateTraderBranchMethod,
+                        __instance.Code,
+                        additions
                     ))
                 {
                     controller.NPCEntity.Api.Logger.Warning(
-                        "Rumor Network não conseguiu localizar o menu " +
-                        $"principal de {controller.NPCEntity.Code}: " +
-                        failure
+                        "Rumor Network não conseguiu criar o submenu " +
+                        "de localização de comerciantes."
                     );
 
                     return;
                 }
-
-                existing = combined;
             }
 
-            if (config != null)
+            if (!rumorBranchExists)
             {
-                config.components = existing;
-                BehaviorDialogueField.SetValue(behavior, config);
+                if (!TryCreateBranch(
+                        CreateRumorBranchMethod,
+                        __instance.Code,
+                        additions
+                    ))
+                {
+                    controller.NPCEntity.Api.Logger.Warning(
+                        "Rumor Network não conseguiu criar o submenu " +
+                        "de rumores gerais."
+                    );
+
+                    return;
+                }
             }
 
-            ControllerDialogueField.SetValue(controller, existing);
+            foreach (DialogueComponent component in additions)
+            {
+                component.Init(ref nextId);
+            }
 
-            foreach (DialogueComponent component in existing)
+            DialogueComponent[] combined = additions.Count == 0
+                ? existing
+                : existing.Concat(additions).ToArray();
+
+            ControllerDialogueField.SetValue(
+                controller,
+                combined
+            );
+
+            GuiDialogueDialog? dialog =
+                ComponentDialogField?.GetValue(__instance)
+                    as GuiDialogueDialog;
+
+            foreach (DialogueComponent component in additions)
             {
                 component.SetReferences(
                     controller,
-                    behavior.Dialog
+                    dialog
                 );
             }
 
-            AssetLocation? dialogueLocation =
-                DialogueLocationField?.GetValue(behavior)
-                    as AssetLocation;
-
             controller.NPCEntity.Api.Logger.Notification(
-                "Rumor Network injetou opções de rumores no diálogo " +
-                $"{dialogueLocation ?? controller.NPCEntity.Code}."
+                "Rumor Network anexou opções ao menu exibido " +
+                $"{__instance.Code} de {controller.NPCEntity.Code}. " +
+                $"Respostas={__instance.Text?.Length ?? 0}."
             );
         }
 
-        private static bool TryInjectComponents(
-            DialogueComponent[] existing,
-            out DialogueComponent[] combined,
-            out string failure
+        private static bool HasRumorChoices(
+            DlgTalkComponent component
         )
         {
-            combined = existing;
-            failure = string.Empty;
+            return component.Text?.Any(answer =>
+                string.Equals(
+                    answer.JumpTo,
+                    TraderRootCode,
+                    StringComparison.OrdinalIgnoreCase
+                ) ||
+                string.Equals(
+                    answer.JumpTo,
+                    RumorRootCode,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            ) == true;
+        }
 
-            DlgTalkComponent? root = FindTradingRoot(existing);
-            if (root == null)
-            {
-                failure = DescribePlayerMenus(existing);
-                return false;
-            }
-
-            if (
-                CreateTraderBranchMethod == null ||
-                CreateRumorBranchMethod == null
-            )
-            {
-                failure = "métodos de criação dos submenus não encontrados";
-                return false;
-            }
-
-            int nextId = existing
+        private static int FindNextAnswerId(
+            IEnumerable<DialogueComponent> components
+        )
+        {
+            return components
                 .OfType<DlgTalkComponent>()
                 .SelectMany(component =>
                     component.Text ??
@@ -243,251 +264,67 @@ namespace RumorNetwork.Dialogue
                 .Select(element => element.Id)
                 .DefaultIfEmpty(-1)
                 .Max() + 1;
+        }
 
-            List<DialogeTextElement> rootAnswers =
-                new(
-                    root.Text ??
-                    Array.Empty<DialogeTextElement>()
-                );
+        private static void AppendRootChoices(
+            DlgTalkComponent root,
+            ref int nextId
+        )
+        {
+            List<DialogeTextElement> answers = new(
+                root.Text ??
+                Array.Empty<DialogeTextElement>()
+            );
 
-            rootAnswers.Add(new DialogeTextElement
+            answers.Add(new DialogeTextElement
             {
                 Id = nextId++,
                 Value =
                     "Do you know any other traders around?",
-                JumpTo = "rumornetwork-root-traders"
+                JumpTo = TraderRootCode
             });
 
-            rootAnswers.Add(new DialogeTextElement
+            answers.Add(new DialogeTextElement
             {
                 Id = nextId++,
                 Value =
                     "Have you heard any rumors lately?",
-                JumpTo = "rumornetwork-root-rumors"
+                JumpTo = RumorRootCode
             });
 
-            root.Text = rootAnswers.ToArray();
-
-            List<DialogueComponent> additions = new();
-
-            object? traderBranches =
-                CreateTraderBranchMethod.Invoke(
-                    null,
-                    new object[] { root.Code }
-                );
-
-            object? rumorBranches =
-                CreateRumorBranchMethod.Invoke(
-                    null,
-                    new object[] { root.Code }
-                );
-
-            if (
-                traderBranches is not
-                    IEnumerable<DialogueComponent> traderComponents ||
-                rumorBranches is not
-                    IEnumerable<DialogueComponent> rumorComponents
-            )
-            {
-                failure = "submenus retornaram formato inesperado";
-                return false;
-            }
-
-            additions.AddRange(traderComponents);
-            additions.AddRange(rumorComponents);
-
-            foreach (DialogueComponent component in additions)
-            {
-                component.Init(ref nextId);
-            }
-
-            combined = existing
-                .Concat(additions)
-                .ToArray();
-
-            return true;
+            root.Text = answers.ToArray();
         }
 
-        private static DlgTalkComponent? FindTradingRoot(
-            DialogueComponent[] components
+        private static bool TryCreateBranch(
+            MethodInfo? factory,
+            string rootCode,
+            ICollection<DialogueComponent> destination
         )
         {
-            DlgTalkComponent[] playerMenus = components
-                .OfType<DlgTalkComponent>()
-                .Where(component =>
-                    component.Owner == "player" &&
-                    component.Text != null &&
-                    component.Text.Length > 0
-                )
-                .ToArray();
-
-            DlgTalkComponent? directTradeMenu =
-                playerMenus.FirstOrDefault(component =>
-                    component.Text!.Any(answer =>
-                        string.Equals(
-                            answer.JumpTo,
-                            "opentrade",
-                            StringComparison.OrdinalIgnoreCase
-                        )
-                    )
-                );
-
-            if (directTradeMenu != null)
-            {
-                return directTradeMenu;
-            }
-
-            Dictionary<string, DialogueComponent> byCode =
-                components
-                    .Where(component =>
-                        !string.IsNullOrWhiteSpace(component.Code)
-                    )
-                    .GroupBy(component => component.Code)
-                    .ToDictionary(
-                        group => group.Key,
-                        group => group.First(),
-                        StringComparer.OrdinalIgnoreCase
-                    );
-
-            DlgTalkComponent? indirectTradeMenu =
-                playerMenus.FirstOrDefault(component =>
-                    component.Text!.Any(answer =>
-                        CanReachOpenTrade(
-                            answer.JumpTo,
-                            byCode,
-                            new HashSet<string>(
-                                StringComparer.OrdinalIgnoreCase
-                            ),
-                            0
-                        )
-                    )
-                );
-
-            if (indirectTradeMenu != null)
-            {
-                return indirectTradeMenu;
-            }
-
-            // Vanilla trader root menus are the broad player-choice menus.
-            // This fallback also supports dialogue variants whose trade path
-            // is implemented through triggers instead of a named opentrade
-            // component.
-            return playerMenus
-                .OrderByDescending(component =>
-                    component.Text!.Length
-                )
-                .FirstOrDefault();
-        }
-
-        private static bool CanReachOpenTrade(
-            string? code,
-            IReadOnlyDictionary<string, DialogueComponent> byCode,
-            ISet<string> visited,
-            int depth
-        )
-        {
-            if (
-                string.IsNullOrWhiteSpace(code) ||
-                depth > 12
-            )
+            if (factory == null)
             {
                 return false;
             }
 
-            if (string.Equals(
-                    code,
-                    "opentrade",
-                    StringComparison.OrdinalIgnoreCase
-                ))
-            {
-                return true;
-            }
-
-            if (!visited.Add(code))
-            {
-                return false;
-            }
-
-            if (!byCode.TryGetValue(code, out DialogueComponent? component))
-            {
-                return false;
-            }
-
-            if (CanReachOpenTrade(
-                    component.JumpTo,
-                    byCode,
-                    visited,
-                    depth + 1
-                ))
-            {
-                return true;
-            }
-
-            if (component is DlgTalkComponent talk)
-            {
-                foreach (
-                    DialogeTextElement answer
-                    in talk.Text ?? Array.Empty<DialogeTextElement>()
-                )
-                {
-                    if (CanReachOpenTrade(
-                            answer.JumpTo,
-                            byCode,
-                            visited,
-                            depth + 1
-                        ))
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            if (component is DlgConditionComponent condition)
-            {
-                return
-                    CanReachOpenTrade(
-                        condition.ThenJumpTo,
-                        byCode,
-                        visited,
-                        depth + 1
-                    ) ||
-                    CanReachOpenTrade(
-                        condition.ElseJumpTo,
-                        byCode,
-                        visited,
-                        depth + 1
-                    );
-            }
-
-            return false;
-        }
-
-        private static string DescribePlayerMenus(
-            IEnumerable<DialogueComponent> components
-        )
-        {
-            string description = string.Join(
-                "; ",
-                components
-                    .OfType<DlgTalkComponent>()
-                    .Where(component =>
-                        component.Owner == "player"
-                    )
-                    .Select(component =>
-                        $"{component.Code}=[" +
-                        string.Join(
-                            ",",
-                            component.Text?
-                                .Select(answer => answer.JumpTo)
-                                ?? Array.Empty<string>()
-                        ) +
-                        "]"
-                    )
+            object? result = factory.Invoke(
+                null,
+                new object[] { rootCode }
             );
 
-            return string.IsNullOrWhiteSpace(description)
-                ? "nenhum componente de fala do jogador"
-                : description;
+            if (
+                result is not
+                    IEnumerable<DialogueComponent> components
+            )
+            {
+                return false;
+            }
+
+            foreach (DialogueComponent component in components)
+            {
+                destination.Add(component);
+            }
+
+            return true;
         }
     }
 }
