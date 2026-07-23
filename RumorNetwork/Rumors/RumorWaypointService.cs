@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using RumorNetwork.Configuration;
 using RumorNetwork.Structures;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 using Vintagestory.GameContent;
@@ -12,14 +14,6 @@ namespace RumorNetwork.Rumors
 {
     public static class RumorWaypointService
     {
-        private const double ApproximateMinimumOffset = 128;
-        private const double ApproximateMaximumOffset = 384;
-
-        private const string ApproximateRuinColor = "#4DA6FF";
-        private const string ExactRuinColor = "#66CC66";
-        private const string TranslocatorColor = "#4DA6FF";
-        private const string TraderColor = "#F2C94C";
-
         private const string WaypointGuidPrefix = "rumornetwork:";
         private const string WaypointTitlePrefix = "Rumor:";
 
@@ -379,13 +373,16 @@ namespace RumorNetwork.Rumors
                 return position;
             }
 
+            RumorWaypointConfig config =
+                RumorRuntimeSettings.Waypoints;
+
             double angle = random.NextDouble() * Math.PI * 2;
             double distance =
-                ApproximateMinimumOffset +
+                config.ApproximateMinimumOffset +
                 random.NextDouble() *
                 (
-                    ApproximateMaximumOffset -
-                    ApproximateMinimumOffset
+                    config.ApproximateMaximumOffset -
+                    config.ApproximateMinimumOffset
                 );
 
             position.X += Math.Cos(angle) * distance;
@@ -399,13 +396,22 @@ namespace RumorNetwork.Rumors
             RumorKnowledgeLevel knowledge
         )
         {
+            RumorWaypointConfig config =
+                RumorRuntimeSettings.Waypoints;
+
             return record.Kind switch
             {
-                StructureKind.Trader => TraderColor,
-                StructureKind.Translocator => TranslocatorColor,
-                _ when knowledge == RumorKnowledgeLevel.Approximate =>
-                    ApproximateRuinColor,
-                _ => ExactRuinColor
+                StructureKind.Trader =>
+                    config.TraderColor,
+
+                StructureKind.Translocator =>
+                    config.TranslocatorColor,
+
+                _ when knowledge ==
+                    RumorKnowledgeLevel.Approximate =>
+                        config.ApproximateRuinColor,
+
+                _ => config.ExactRuinColor
             };
         }
 
@@ -413,15 +419,24 @@ namespace RumorNetwork.Rumors
             RumorRecord record
         )
         {
+            RumorWaypointConfig config =
+                RumorRuntimeSettings.Waypoints;
+
             return record.Kind switch
             {
-                StructureKind.Trader => "trader",
-                StructureKind.Translocator => "translocator",
-                StructureKind.UndergroundRuin => "ruins",
-                StructureKind.BetterRuin => "ruins",
-                StructureKind.SurfaceRuin => "ruins",
-                StructureKind.RuinedVillage => "ruins",
-                _ => "circle"
+                StructureKind.Trader =>
+                    config.TraderIcon,
+
+                StructureKind.Translocator =>
+                    config.TranslocatorIcon,
+
+                StructureKind.UndergroundRuin or
+                StructureKind.BetterRuin or
+                StructureKind.SurfaceRuin or
+                StructureKind.RuinedVillage =>
+                    config.RuinIcon,
+
+                _ => config.FallbackIcon
             };
         }
 
@@ -430,38 +445,25 @@ namespace RumorNetwork.Rumors
             RumorKnowledgeLevel knowledge
         )
         {
-            if (record.Kind == StructureKind.Trader)
+            RumorWaypointConfig config =
+                RumorRuntimeSettings.Waypoints;
+
+            string key = record.Kind switch
             {
-                return "Rumor: Trader";
-            }
+                StructureKind.Trader =>
+                    config.TraderTitleKey,
 
-            if (record.Kind == StructureKind.Translocator)
-            {
-                return "Rumor: Translocator";
-            }
+                StructureKind.Translocator =>
+                    config.TranslocatorTitleKey,
 
-            string precision =
-                knowledge == RumorKnowledgeLevel.Approximate
-                    ? "Approximate"
-                    : "Exact";
+                _ when knowledge ==
+                    RumorKnowledgeLevel.Approximate =>
+                        config.ApproximateRuinTitleKey,
 
-            if (IsRuin(record.Kind))
-            {
-                return $"Rumor: Ruins - {precision}";
-            }
+                _ => config.ExactRuinTitleKey
+            };
 
-            return $"Rumor: {record.Kind} - {precision}";
-        }
-
-        private static bool IsRuin(
-            StructureKind kind
-        )
-        {
-            return kind is
-                StructureKind.UndergroundRuin or
-                StructureKind.BetterRuin or
-                StructureKind.SurfaceRuin or
-                StructureKind.RuinedVillage;
+            return Lang.Get(key);
         }
     }
 }
