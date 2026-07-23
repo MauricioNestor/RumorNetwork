@@ -69,13 +69,10 @@ namespace RumorNetwork.Configuration
                 in Categories
             )
             {
-                if (
-                    category.Enabled &&
-                    category.Matches(
+                if (category.Matches(
                         sourceCode,
                         sourceGroup
-                    )
-                )
+                    ))
                 {
                     return category;
                 }
@@ -161,13 +158,13 @@ namespace RumorNetwork.Configuration
                 Category(
                     "Rank3",
                     3,
-                    true,
+                    false,
                     groupExact: "rank-3"
                 ),
                 Category(
                     "Rank2",
                     4,
-                    true,
+                    false,
                     groupExact: "rank-2"
                 ),
                 Category(
@@ -191,7 +188,7 @@ namespace RumorNetwork.Configuration
                 Category(
                     "Uncommon",
                     3,
-                    true,
+                    false,
                     groupContains: "uncommon"
                 ),
                 Category(
