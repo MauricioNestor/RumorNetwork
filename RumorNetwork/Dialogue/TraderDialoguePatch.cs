@@ -1,24 +1,28 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
+using System.Reflection;
 using HarmonyLib;
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
-using Vintagestory.API.Datastructures;
 using Vintagestory.API.Server;
+using Vintagestory.API.Util;
 using Vintagestory.GameContent;
 
 namespace RumorNetwork.Dialogue
 {
     public sealed class TraderDialoguePatch : ModSystem
     {
+        internal const int ResultPacketId = 22137;
+
         private const string HarmonyId =
             "rumornetwork.trader-dialogue";
 
-        private static readonly ConditionalWeakTable<
-            DialogueController,
-            object
-        > AttachedControllers = new();
+        private static readonly FieldInfo? DialogueField =
+            AccessTools.Field(
+                typeof(DialogueController),
+                "dialogue"
+            );
 
         private Harmony? harmony;
 
@@ -31,37 +35,57 @@ namespace RumorNetwork.Dialogue
         {
             harmony = new Harmony(HarmonyId);
 
-            var loadDialogue = AccessTools.Method(
-                typeof(EntityBehaviorConversable),
-                "loadDialogue"
-            );
-
-            var getController = AccessTools.Method(
+            MethodInfo? getController = AccessTools.Method(
                 typeof(EntityBehaviorConversable),
                 nameof(EntityBehaviorConversable.GetOrCreateController)
             );
 
-            if (loadDialogue != null)
+            MethodInfo? receiveServerPacket = AccessTools.Method(
+                typeof(EntityBehaviorConversable),
+                nameof(EntityBehaviorConversable.OnReceivedServerPacket)
+            );
+
+            if (getController == null)
             {
-                harmony.Patch(
-                    loadDialogue,
-                    postfix: new HarmonyMethod(
-                        typeof(TraderDialoguePatch),
-                        nameof(AppendRumorDialogue)
-                    )
+                api.Logger.Error(
+                    "Rumor Network não encontrou " +
+                    "EntityBehaviorConversable.GetOrCreateController; " +
+                    "o diálogo de rumores não será injetado."
                 );
             }
-
-            if (getController != null)
+            else
             {
                 harmony.Patch(
                     getController,
                     postfix: new HarmonyMethod(
                         typeof(TraderDialoguePatch),
-                        nameof(AttachTriggerHandler)
+                        nameof(OnControllerCreated)
                     )
                 );
             }
+
+            if (receiveServerPacket == null)
+            {
+                api.Logger.Error(
+                    "Rumor Network não encontrou " +
+                    "EntityBehaviorConversable.OnReceivedServerPacket; " +
+                    "respostas do diálogo não poderão voltar ao cliente."
+                );
+            }
+            else
+            {
+                harmony.Patch(
+                    receiveServerPacket,
+                    prefix: new HarmonyMethod(
+                        typeof(TraderDialoguePatch),
+                        nameof(ReceiveRumorResult)
+                    )
+                );
+            }
+
+            api.Logger.Notification(
+                "Rumor Network registrou a integração de diálogo dos comerciantes."
+            );
         }
 
         public override void Dispose()
@@ -71,94 +95,128 @@ namespace RumorNetwork.Dialogue
             base.Dispose();
         }
 
-        private static void AppendRumorDialogue(
+        private static void OnControllerCreated(
             EntityBehaviorConversable __instance,
-            ref DialogueConfig __result
+            DialogueController __result
         )
         {
-            if (__result?.components == null)
+            if (
+                __result == null ||
+                __result.NPCEntity is not EntityTrader ||
+                DialogueField == null
+            )
             {
                 return;
             }
 
-            Entity? entity = Traverse.Create(__instance)
-                .Field("entity")
-                .GetValue<Entity>();
+            DialogueComponent[]? existing =
+                DialogueField.GetValue(__result)
+                    as DialogueComponent[];
 
-            if (entity is not EntityTrader)
-            {
-                return;
-            }
-
-            if (__result.components.Any(
-                    component =>
-                        component.Code == "rumornetwork-root-traders"
-                ))
-            {
-                return;
-            }
-
-            DlgTalkComponent? root = __result.components
-                .OfType<DlgTalkComponent>()
-                .FirstOrDefault(component =>
-                    component.Owner == "player" &&
-                    component.Text?.Any(answer =>
-                        answer.JumpTo == "opentrade"
-                    ) == true
+            if (
+                existing == null ||
+                existing.Any(component =>
+                    component.Code ==
+                    "rumornetwork-root-traders"
                 )
-                ?? __result.components
-                    .OfType<DlgTalkComponent>()
-                    .FirstOrDefault(component =>
-                        component.Owner == "player"
-                    );
+            )
+            {
+                return;
+            }
 
+            DlgTalkComponent? root = FindRoot(existing);
             if (root == null)
             {
+                __result.NPCEntity.Api.Logger.Warning(
+                    "Rumor Network não encontrou o menu principal " +
+                    $"do diálogo de {__result.NPCEntity.Code}."
+                );
+
                 return;
             }
 
-            int nextId = __result.components
+            int nextId = existing
                 .OfType<DlgTalkComponent>()
                 .SelectMany(component =>
-                    component.Text ?? Array.Empty<DialogeTextElement>()
+                    component.Text ??
+                    Array.Empty<DialogeTextElement>()
                 )
                 .Select(element => element.Id)
                 .DefaultIfEmpty(-1)
                 .Max() + 1;
 
             List<DialogeTextElement> rootAnswers =
-                new(root.Text ?? Array.Empty<DialogeTextElement>());
+                new(
+                    root.Text ??
+                    Array.Empty<DialogeTextElement>()
+                );
 
             rootAnswers.Add(new DialogeTextElement
             {
                 Id = nextId++,
-                Value = "Do you know any other traders around?",
-                JumpTo = "rumornetwork-root-traders"
+                Value =
+                    "Do you know any other traders around?",
+                JumpTo = "rumornetwork-buytrader"
             });
 
             rootAnswers.Add(new DialogeTextElement
             {
                 Id = nextId++,
-                Value = "Have you heard any rumors lately?",
+                Value =
+                    "Have you heard any rumors lately?",
                 JumpTo = "rumornetwork-root-rumors"
             });
 
             root.Text = rootAnswers.ToArray();
 
-            List<DialogueComponent> components =
-                new(__result.components);
+            List<DialogueComponent> additions = new();
 
-            components.AddRange(CreateTraderBranch(
+            additions.AddRange(CreateTraderBranch(
                 root.Code,
                 ref nextId
             ));
 
-            components.AddRange(CreateRumorBranch(
+            additions.AddRange(CreateRumorBranch(
                 root.Code,
                 ref nextId
             ));
 
-            __result.components = components.ToArray();
+            foreach (DialogueComponent component in additions)
+            {
+                component.SetReferences(
+                    __result,
+                    __instance.Dialog
+                );
+            }
+
+            DialogueField.SetValue(
+                __result,
+                existing.Concat(additions).ToArray()
+            );
+
+            __result.NPCEntity.Api.Logger.VerboseDebug(
+                "Rumor Network injetou opções de rumores no " +
+                $"diálogo de {__result.NPCEntity.Code}."
+            );
+        }
+
+        private static DlgTalkComponent? FindRoot(
+            IEnumerable<DialogueComponent> components
+        )
+        {
+            DlgTalkComponent[] playerTalk = components
+                .OfType<DlgTalkComponent>()
+                .Where(component =>
+                    component.Owner == "player"
+                )
+                .ToArray();
+
+            return playerTalk.FirstOrDefault(component =>
+                    component.Text?.Any(answer =>
+                        answer.JumpTo == "opentrade"
+                    ) == true
+                )
+                ?? playerTalk.FirstOrDefault();
         }
 
         private static IEnumerable<DialogueComponent>
@@ -169,39 +227,9 @@ namespace RumorNetwork.Dialogue
         {
             return new DialogueComponent[]
             {
-                NpcTalk(
-                    "rumornetwork-root-traders",
-                    "One of my colleagues may be stationed nearby. I can mark their location on your map for four rusty gears.",
-                    "rumornetwork-trader-options"
-                ),
-                PlayerTalk(
-                    "rumornetwork-trader-options",
-                    ref nextId,
-                    ("I'll pay four rusty gears.", "rumornetwork-buytrader"),
-                    ("I don't have that many gears.", rootCode)
-                ),
-                Trigger(
+                Action(
                     "rumornetwork-buytrader",
-                    "buytrader",
-                    "rumornetwork-trader-success-check"
-                ),
-                Condition(
-                    "rumornetwork-trader-success-check",
-                    "success",
-                    "rumornetwork-trader-success",
-                    "rumornetwork-trader-search-check"
-                ),
-                Condition(
-                    "rumornetwork-trader-search-check",
-                    "searching",
-                    "rumornetwork-trader-searching",
-                    "rumornetwork-trader-quota-check"
-                ),
-                Condition(
-                    "rumornetwork-trader-quota-check",
-                    "quota",
-                    "rumornetwork-trader-quota",
-                    "rumornetwork-trader-failed"
+                    "buytrader"
                 ),
                 NpcTalk(
                     "rumornetwork-trader-success",
@@ -219,8 +247,13 @@ namespace RumorNetwork.Dialogue
                     rootCode
                 ),
                 NpcTalk(
+                    "rumornetwork-trader-nofunds",
+                    "Come back when you have four rusty gears.",
+                    rootCode
+                ),
+                NpcTalk(
                     "rumornetwork-trader-failed",
-                    "I can't arrange that trade right now.",
+                    "I don't know of any other traders I can point you toward. Sorry.",
                     rootCode
                 )
             };
@@ -242,49 +275,34 @@ namespace RumorNetwork.Dialogue
                 PlayerTalk(
                     "rumornetwork-rumor-options",
                     ref nextId,
-                    ("I'll pay one rusty gear for whatever you've heard.", "rumornetwork-buyapproximate"),
-                    ("Here are three rusty gears. I want reliable information.", "rumornetwork-buyexact"),
-                    ("I have a temporal gear. I want exceptional gossip.", "rumornetwork-buytranslocator"),
-                    ("Never mind. I'm not interested.", rootCode)
+                    (
+                        "I'll pay one rusty gear for whatever you've heard.",
+                        "rumornetwork-buyapproximate"
+                    ),
+                    (
+                        "Here are three rusty gears. I want reliable information.",
+                        "rumornetwork-buyexact"
+                    ),
+                    (
+                        "I have a temporal gear. I want exceptional gossip.",
+                        "rumornetwork-buytranslocator"
+                    ),
+                    (
+                        "Never mind. I'm not interested.",
+                        rootCode
+                    )
                 ),
-                Trigger(
+                Action(
                     "rumornetwork-buyapproximate",
-                    "buyapproximate",
-                    "rumornetwork-rumor-result"
+                    "buyapproximate"
                 ),
-                Trigger(
+                Action(
                     "rumornetwork-buyexact",
-                    "buyexact",
-                    "rumornetwork-rumor-result"
+                    "buyexact"
                 ),
-                Trigger(
+                Action(
                     "rumornetwork-buytranslocator",
-                    "buytranslocator",
-                    "rumornetwork-rumor-result"
-                ),
-                Condition(
-                    "rumornetwork-rumor-result",
-                    "approximate",
-                    "rumornetwork-rumor-approximate",
-                    "rumornetwork-rumor-exact-check"
-                ),
-                Condition(
-                    "rumornetwork-rumor-exact-check",
-                    "exact",
-                    "rumornetwork-rumor-exact",
-                    "rumornetwork-rumor-translocator-check"
-                ),
-                Condition(
-                    "rumornetwork-rumor-translocator-check",
-                    "translocator",
-                    "rumornetwork-rumor-translocator",
-                    "rumornetwork-rumor-search-check"
-                ),
-                Condition(
-                    "rumornetwork-rumor-search-check",
-                    "searching",
-                    "rumornetwork-rumor-searching",
-                    "rumornetwork-rumor-failed"
+                    "buytranslocator"
                 ),
                 NpcTalk(
                     "rumornetwork-rumor-approximate",
@@ -298,12 +316,17 @@ namespace RumorNetwork.Dialogue
                 ),
                 NpcTalk(
                     "rumornetwork-rumor-translocator",
-                    "I know the location of an intact ancient translocator. I've marked it precisely on your map.",
+                    "I know the location of an unrepaired ancient translocator. I've marked it precisely on your map.",
                     rootCode
                 ),
                 NpcTalk(
                     "rumornetwork-rumor-searching",
                     "That kind of information takes time. Ask me again in a moment.",
+                    rootCode
+                ),
+                NpcTalk(
+                    "rumornetwork-rumor-nofunds",
+                    "Useful information is not free. Come back when you can pay.",
                     rootCode
                 ),
                 NpcTalk(
@@ -345,9 +368,11 @@ namespace RumorNetwork.Dialogue
             DialogeTextElement[] elements =
                 new DialogeTextElement[answers.Length];
 
-            for (int index = 0;
+            for (
+                int index = 0;
                 index < answers.Length;
-                index++)
+                index++
+            )
             {
                 elements[index] = new DialogeTextElement
                 {
@@ -366,94 +391,128 @@ namespace RumorNetwork.Dialogue
             };
         }
 
-        private static DlgGenericComponent Trigger(
+        private static RumorActionDialogueComponent Action(
             string code,
+            string action
+        )
+        {
+            return new RumorActionDialogueComponent
+            {
+                Code = code,
+                Type = "rumornetwork-action",
+                Action = action
+            };
+        }
+
+        internal static string ResolveResponseCode(
             string action,
-            string jumpTo
+            string result
         )
         {
-            return new DlgGenericComponent
+            if (action == "buytrader")
             {
-                Code = code,
-                Type = "trigger",
-                Trigger = "rumornetwork-action",
-                TriggerData = JsonObject.FromJson(
-                    "{\"action\":\"" + action + "\"}"
-                ),
-                JumpTo = jumpTo
+                return result switch
+                {
+                    "success" =>
+                        "rumornetwork-trader-success",
+                    "searching" =>
+                        "rumornetwork-trader-searching",
+                    "quota" =>
+                        "rumornetwork-trader-quota",
+                    "nofunds" =>
+                        "rumornetwork-trader-nofunds",
+                    _ =>
+                        "rumornetwork-trader-failed"
+                };
+            }
+
+            return result switch
+            {
+                "approximate" =>
+                    "rumornetwork-rumor-approximate",
+                "exact" =>
+                    "rumornetwork-rumor-exact",
+                "translocator" =>
+                    "rumornetwork-rumor-translocator",
+                "searching" =>
+                    "rumornetwork-rumor-searching",
+                "nofunds" =>
+                    "rumornetwork-rumor-nofunds",
+                _ =>
+                    "rumornetwork-rumor-failed"
             };
         }
 
-        private static DlgConditionComponent Condition(
-            string code,
-            string expected,
-            string thenJumpTo,
-            string elseJumpTo
+        private static bool ReceiveRumorResult(
+            EntityBehaviorConversable __instance,
+            int packetid,
+            byte[] data,
+            ref EnumHandling handled
         )
         {
-            return new DlgConditionComponent
+            if (packetid != ResultPacketId)
             {
-                Code = code,
-                Type = "condition",
-                Variable = "player.rumornetworkresult",
-                IsValue = expected,
-                ThenJumpTo = thenJumpTo,
-                ElseJumpTo = elseJumpTo
-            };
-        }
+                return true;
+            }
 
-        private static void AttachTriggerHandler(
-            DialogueController __result
-        )
-        {
+            handled = EnumHandling.PreventDefault;
+
+            if (__instance.entity.Api is not ICoreClientAPI capi)
+            {
+                return false;
+            }
+
+            string responseCode =
+                SerializerUtil.Deserialize<string>(data);
+
             if (
-                __result == null ||
-                __result.NPCEntity is not EntityTrader ||
-                __result.NPCEntity.Api.Side != EnumAppSide.Server
+                __instance.ControllerByPlayer.TryGetValue(
+                    capi.World.Player.PlayerUID,
+                    out DialogueController? controller
+                )
             )
             {
-                return;
+                controller.JumpTo(responseCode);
             }
 
-            if (AttachedControllers.TryGetValue(
-                    __result,
-                    out _
-                ))
+            return false;
+        }
+    }
+
+    internal sealed class RumorActionDialogueComponent :
+        DialogueComponent
+    {
+        public string Action { get; set; } = string.Empty;
+
+        public override string? Execute()
+        {
+            if (
+                controller.NPCEntity.Api is not ICoreServerAPI sapi ||
+                controller.PlayerEntity.Player is not IServerPlayer player
+            )
             {
-                return;
+                return null;
             }
 
-            AttachedControllers.Add(__result, new object());
-            __result.DialogTriggers += (
-                triggeringEntity,
-                value,
-                data
-            ) =>
-            {
-                if (
-                    value != "rumornetwork-action" ||
-                    triggeringEntity is not EntityPlayer playerEntity ||
-                    playerEntity.Player is not IServerPlayer player
-                )
-                {
-                    return -1;
-                }
+            string result = RumorDialogueRuntime.Execute(
+                player,
+                Action
+            );
 
-                string action = data?["action"].AsString() ?? string.Empty;
-                string result = RumorDialogueRuntime.Execute(
-                    player,
-                    action
-                );
-
-                __result.VarSys.SetVariable(
-                    EnumActivityVariableScope.Player,
-                    playerEntity,
-                    "rumornetworkresult",
+            string responseCode =
+                TraderDialoguePatch.ResolveResponseCode(
+                    Action,
                     result
                 );
 
-                return -1;
-            };
+            sapi.Network.SendEntityPacket(
+                player,
+                controller.NPCEntity.EntityId,
+                TraderDialoguePatch.ResultPacketId,
+                SerializerUtil.Serialize(responseCode)
+            );
+
+            return null;
         }
     }
 }
