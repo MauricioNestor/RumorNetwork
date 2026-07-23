@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
+using Vintagestory.API.Client;
+using Vintagestory.API.Common;
 using Vintagestory.GameContent;
 
 namespace RumorNetwork.Dialogue
