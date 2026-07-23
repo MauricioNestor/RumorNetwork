@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using RumorNetwork.Configuration;
 using RumorNetwork.Structures;
 
 namespace RumorNetwork.Rumors;
@@ -206,6 +207,49 @@ public sealed class RumorRegistry
         }
     }
 
+    public List<RumorRecord> CreateShuffledCandidates(
+        Random random,
+        RumorKnowledgeLevel requestedKnowledge
+    )
+    {
+        List<WeightedCandidate> candidates = new();
+
+        foreach (RumorRecord candidate in records.Values)
+        {
+            if (
+                !CanSellAtKnowledge(
+                    candidate,
+                    requestedKnowledge
+                ) ||
+                !RumorEligibilityPolicy
+                    .IsGeneralRumorEligible(candidate.Kind)
+            )
+            {
+                continue;
+            }
+
+            int weight = RumorEligibilityPolicy
+                .GetGeneralRumorWeight(candidate.Kind);
+
+            if (weight <= 0)
+            {
+                continue;
+            }
+
+            candidates.Add(
+                new WeightedCandidate(
+                    candidate,
+                    weight
+                )
+            );
+        }
+
+        return CreateWeightedOrder(
+            candidates,
+            random
+        );
+    }
+
     public List<RumorRecord>
         CreateShuffledNotSoldCandidates(
             Random random
@@ -223,7 +267,7 @@ public sealed class RumorRegistry
             StructureKind? requiredKind
         )
     {
-        List<RumorRecord> candidates = new();
+        List<WeightedCandidate> candidates = new();
 
         foreach (RumorRecord candidate in records.Values)
         {
@@ -231,9 +275,7 @@ public sealed class RumorRegistry
                 candidate.Knowledge !=
                     RumorKnowledgeLevel.NotSold ||
                 !RumorEligibilityPolicy
-                    .IsGeneralRumorEligible(
-                        candidate.Kind
-                    ) ||
+                    .IsGeneralRumorEligible(candidate.Kind) ||
                 (
                     requiredKind.HasValue &&
                     candidate.Kind != requiredKind.Value
@@ -243,40 +285,35 @@ public sealed class RumorRegistry
                 continue;
             }
 
-            candidates.Add(candidate);
-        }
+            int weight = RumorEligibilityPolicy
+                .GetGeneralRumorWeight(candidate.Kind);
 
-        for (
-            int index = candidates.Count - 1;
-            index > 0;
-            index--
-        )
-        {
-            int swapIndex =
-                random.Next(index + 1);
+            if (weight <= 0)
+            {
+                continue;
+            }
 
-            (
-                candidates[index],
-                candidates[swapIndex]
-            ) =
-            (
-                candidates[swapIndex],
-                candidates[index]
+            candidates.Add(
+                new WeightedCandidate(
+                    candidate,
+                    weight
+                )
             );
         }
 
-        return candidates;
+        return CreateWeightedOrder(
+            candidates,
+            random
+        );
     }
 
     public bool TryPickRandomNotSold(
-         Random random,
-         out RumorRecord? record
+        Random random,
+        out RumorRecord? record
     )
     {
         List<RumorRecord> candidates =
-            CreateShuffledNotSoldCandidates(
-                random
-            );
+            CreateShuffledNotSoldCandidates(random);
 
         if (candidates.Count == 0)
         {
@@ -306,15 +343,101 @@ public sealed class RumorRegistry
             return false;
         }
 
-        if (
-            record.Knowledge
-            != RumorKnowledgeLevel.NotSold
-        )
+        if (record.Knowledge == RumorKnowledgeLevel.NotSold)
         {
-            return false;
+            record.Knowledge = knowledge;
+            return true;
         }
 
-        record.Knowledge = knowledge;
-        return true;
+        if (
+            RumorRuntimeSettings
+                .GeneralRumors
+                .AllowApproximateToExactUpgrade &&
+            record.Knowledge ==
+                RumorKnowledgeLevel.Approximate &&
+            knowledge == RumorKnowledgeLevel.Exact
+        )
+        {
+            record.Knowledge = RumorKnowledgeLevel.Exact;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool CanSellAtKnowledge(
+        RumorRecord record,
+        RumorKnowledgeLevel requestedKnowledge
+    )
+    {
+        if (record.Knowledge == RumorKnowledgeLevel.NotSold)
+        {
+            return true;
+        }
+
+        return
+            RumorRuntimeSettings
+                .GeneralRumors
+                .AllowApproximateToExactUpgrade &&
+            requestedKnowledge == RumorKnowledgeLevel.Exact &&
+            record.Knowledge == RumorKnowledgeLevel.Approximate;
+    }
+
+    private static List<RumorRecord> CreateWeightedOrder(
+        List<WeightedCandidate> candidates,
+        Random random
+    )
+    {
+        List<RumorRecord> ordered = new();
+        List<WeightedCandidate> remaining = new(candidates);
+
+        while (remaining.Count > 0)
+        {
+            long totalWeight = 0;
+
+            foreach (WeightedCandidate candidate in remaining)
+            {
+                totalWeight += candidate.Weight;
+            }
+
+            double roll = random.NextDouble() * totalWeight;
+            long cumulative = 0;
+            int selectedIndex = remaining.Count - 1;
+
+            for (int index = 0; index < remaining.Count; index++)
+            {
+                cumulative += remaining[index].Weight;
+
+                if (roll < cumulative)
+                {
+                    selectedIndex = index;
+                    break;
+                }
+            }
+
+            ordered.Add(
+                remaining[selectedIndex].Record
+            );
+
+            remaining.RemoveAt(selectedIndex);
+        }
+
+        return ordered;
+    }
+
+    private sealed class WeightedCandidate
+    {
+        public RumorRecord Record { get; }
+
+        public int Weight { get; }
+
+        public WeightedCandidate(
+            RumorRecord record,
+            int weight
+        )
+        {
+            Record = record;
+            Weight = weight;
+        }
     }
 }
