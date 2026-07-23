@@ -189,27 +189,20 @@ namespace RumorNetwork.Catalog
                 spawnZ
             );
 
-            string sourceCode =
-                structure?.Code ??
-                trader.Code?.ToString() ??
-                "live-trader";
+            // A living EntityTrader accelerates validation, but it is not
+            // sufficient proof by itself. Requiring the generated trader
+            // structure keeps story/special NPCs out of the catalog.
+            if (structure == null)
+            {
+                logger?.Debug(
+                    "Rumor Network ignorou EntityTrader viva sem " +
+                    $"estrutura worldgen trader em {spawnX},{spawnY},{spawnZ}."
+                );
+                return;
+            }
 
-            string sourceGroup =
-                structure?.Group ?? "live-trader";
-
-            string family = structure != null
-                ? StructureGrouper.GetFamily(structure)
-                : trader.Code?.Path ?? "live-trader";
-
-            Cuboidi sourceLocation = structure?.Location ?? new Cuboidi(
-                spawnX,
-                spawnY,
-                spawnZ,
-                spawnX,
-                spawnY,
-                spawnZ
-            );
-
+            string family = StructureGrouper.GetFamily(structure);
+            Cuboidi sourceLocation = structure.Location;
             Cuboidi targetLocation = new(
                 spawnX,
                 spawnY,
@@ -237,8 +230,8 @@ namespace RumorNetwork.Catalog
                         id,
                         StructureKind.Trader,
                         family,
-                        sourceCode,
-                        sourceGroup,
+                        structure.Code ?? string.Empty,
+                        structure.Group ?? string.Empty,
                         targetLocation,
                         1
                     )
@@ -249,7 +242,8 @@ namespace RumorNetwork.Catalog
             {
                 logger?.Notification(
                     "Rumor Network registrou imediatamente um " +
-                    $"trader vivo em {spawnX},{spawnY},{spawnZ}."
+                    $"trader estruturalmente verificado em " +
+                    $"{spawnX},{spawnY},{spawnZ}."
                 );
             }
         }
