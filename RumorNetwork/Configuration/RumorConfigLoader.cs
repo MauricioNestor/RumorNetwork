@@ -23,7 +23,12 @@ namespace RumorNetwork.Configuration
 
                 config ??= new RumorNetworkConfig();
                 config.Debug ??= RumorDebugConfig.CreateDefault();
+                config.BetterRuins ??=
+                    BetterRuinsRumorConfig.CreateDefault();
+
                 config.Normalize();
+                config.Debug.Normalize();
+                config.BetterRuins.Normalize();
 
                 api.StoreModConfig(
                     config,
@@ -41,7 +46,13 @@ namespace RumorNetwork.Configuration
                 );
 
                 RumorNetworkConfig fallback = new();
+                fallback.Debug ??=
+                    RumorDebugConfig.CreateDefault();
+                fallback.BetterRuins ??=
+                    BetterRuinsRumorConfig.CreateDefault();
                 fallback.Normalize();
+                fallback.Debug.Normalize();
+                fallback.BetterRuins.Normalize();
                 return fallback;
             }
         }
