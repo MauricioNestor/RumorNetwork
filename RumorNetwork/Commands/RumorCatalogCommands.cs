@@ -8,16 +8,16 @@ namespace RumorNetwork.Commands
     public sealed class RumorCatalogCommands
     {
         private readonly RumorRegistry rumorRegistry;
-        private readonly SelectiveStructureCatalogService
-            catalogService;
+        private readonly VerifiedStructureDiscoveryService
+            discoveryService;
 
         public RumorCatalogCommands(
             RumorRegistry rumorRegistry,
-            SelectiveStructureCatalogService catalogService
+            VerifiedStructureDiscoveryService discoveryService
         )
         {
             this.rumorRegistry = rumorRegistry;
-            this.catalogService = catalogService;
+            this.discoveryService = discoveryService;
         }
 
         public void Register(
@@ -27,7 +27,7 @@ namespace RumorNetwork.Commands
             rumorCommand
                 .BeginSubCommand("catalog")
                 .WithDescription(
-                    "Mostra o catálogo remoto de traders e " +
+                    "Mostra o catálogo verificado de traders e " +
                     "translocadores."
                 )
                 .RequiresPlayer()
@@ -38,12 +38,12 @@ namespace RumorNetwork.Commands
             rumorCommand
                 .BeginSubCommand("catalogbackfill")
                 .WithDescription(
-                    "Procura traders e translocadores em " +
-                    "map regions já existentes no save."
+                    "Inicia descoberta temporária e limitada de " +
+                    "traders e translocadores sem salvar chunks."
                 )
                 .RequiresPlayer()
                 .RequiresPrivilege(Privilege.chat)
-                .HandleWith(RequestBackfill)
+                .HandleWith(RequestDiscovery)
                 .EndSubCommand();
         }
 
@@ -62,16 +62,19 @@ namespace RumorNetwork.Commands
                 );
 
             return TextCommandResult.Success(
-                "Catálogo remoto: " +
+                "Catálogo verificado: " +
                 $"Traders={traders} | " +
                 $"Translocators={translocators} | " +
-                $"Regiões verificadas=" +
-                $"{catalogService.ScannedRegionCount} | " +
-                $"Pendentes={catalogService.PendingRegionCount}."
+                $"Chunks inspecionados=" +
+                $"{discoveryService.InspectedChunkCount} | " +
+                $"Buscas={discoveryService.ActiveSearchCount} | " +
+                $"Peeks ativos={discoveryService.ActivePeekCount} | " +
+                $"Orçamento pendente=" +
+                $"{discoveryService.PendingPeekBudget}."
             );
         }
 
-        private TextCommandResult RequestBackfill(
+        private TextCommandResult RequestDiscovery(
             TextCommandCallingArgs args
         )
         {
@@ -86,21 +89,37 @@ namespace RumorNetwork.Commands
                 );
             }
 
-            int queued =
-                catalogService.RequestBackfillAround(
-                    (int)player.Entity.Pos.X,
-                    (int)player.Entity.Pos.Z
+            int blockX = (int)player.Entity.Pos.X;
+            int blockZ = (int)player.Entity.Pos.Z;
+
+            bool traderStarted =
+                discoveryService.RequestAdditional(
+                    StructureKind.Trader,
+                    blockX,
+                    blockZ
                 );
 
+            bool translocatorStarted =
+                discoveryService.RequestAdditional(
+                    StructureKind.Translocator,
+                    blockX,
+                    blockZ
+                );
+
+            if (traderStarted || translocatorStarted)
+            {
+                return TextCommandResult.Success(
+                    "Descoberta verificada iniciada. O worldgen " +
+                    "será simulado em memória dentro dos limites " +
+                    "configurados; nenhum chunk será salvo."
+                );
+            }
+
             return TextCommandResult.Success(
-                queued > 0
-                    ? $"{queued} map regions adicionadas à " +
-                        "fila de backfill. A busca lê somente " +
-                        "regiões já existentes no save."
-                    : catalogService.IsWorking
-                        ? "O backfill já está em andamento."
-                        : "Não há novas regiões para verificar " +
-                            "neste raio."
+                discoveryService.IsWorking
+                    ? "A descoberta verificada já está em andamento."
+                    : "As buscas deste ponto já esgotaram o raio " +
+                        "e orçamento atuais sem novos alvos."
             );
         }
     }
