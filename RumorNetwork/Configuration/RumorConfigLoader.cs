@@ -22,6 +22,7 @@ namespace RumorNetwork.Configuration
                     );
 
                 config ??= new RumorNetworkConfig();
+                config.Debug ??= RumorDebugConfig.CreateDefault();
                 config.Normalize();
 
                 api.StoreModConfig(
