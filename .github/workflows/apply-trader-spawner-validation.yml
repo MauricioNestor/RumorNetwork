@@ -1,0 +1,307 @@
+name: Apply trader spawner validation
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/apply-trader-spawner-validation.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch trader validation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("RumorNetwork/Catalog/VerifiedStructureDiscoveryService.cs")
+          text = path.read_text(encoding="utf-8-sig")
+
+          text = text.replace(
+              "private const int SaveDataVersion = 1;",
+              "private const int SaveDataVersion = 2;",
+              1,
+          )
+
+          old_migration = '''            if (
+                saveData == null ||
+                saveData.Version < SaveDataVersion
+            )
+            {
+                int removed = rumorRegistry.RemoveByKind(
+                    StructureKind.Trader,
+                    StructureKind.Translocator
+                );
+
+                if (removed > 0)
+                {
+                    logger.Notification(
+                        "Rumor Network removeu " +
+                        $"{removed} alvos remotos antigos sem " +
+                        "validação física. Eles serão " +
+                        "redescobertos por peek."
+                    );
+                }
+
+                return;
+            }
+'''
+
+          new_migration = '''            if (
+                saveData == null ||
+                saveData.Version < SaveDataVersion
+            )
+            {
+                int removed = rumorRegistry.RemoveByKind(
+                    StructureKind.Trader
+                );
+
+                logger.Notification(
+                    "Rumor Network invalidou o cache antigo de " +
+                    "descoberta de traders. " +
+                    $"Traders removidos={removed}. " +
+                    "Translocadores fisicamente validados foram " +
+                    "preservados."
+                );
+
+                return;
+            }
+'''
+
+          if old_migration not in text:
+              raise SystemExit("Old discovery migration block not found")
+
+          text = text.replace(old_migration, new_migration, 1)
+
+          start_marker = "        private void InspectTraderEntities("
+          end_marker = "        private void InspectTranslocatorBlocks("
+          start = text.index(start_marker)
+          end = text.index(end_marker, start)
+
+          replacement = '''        private void InspectTraderEntities(
+            IServerChunk[] chunks,
+            ICollection<RumorSite> sites,
+            ISet<string> siteIds
+        )
+        {
+            foreach (IServerChunk chunk in chunks)
+            {
+                if (chunk == null)
+                {
+                    continue;
+                }
+
+                IMapRegion region =
+                    chunk.MapChunk?.MapRegion;
+
+                List<GeneratedStructure> structures =
+                    region?.GeneratedStructures;
+
+                if (
+                    structures == null ||
+                    structures.Count == 0
+                )
+                {
+                    continue;
+                }
+
+                InspectTraderSpawners(
+                    chunk,
+                    structures,
+                    sites,
+                    siteIds
+                );
+
+                InspectSpawnedTraders(
+                    chunk,
+                    structures,
+                    sites,
+                    siteIds
+                );
+            }
+        }
+
+        private void InspectTraderSpawners(
+            IServerChunk chunk,
+            IEnumerable<GeneratedStructure> structures,
+            ICollection<RumorSite> sites,
+            ISet<string> siteIds
+        )
+        {
+            Dictionary<BlockPos, BlockEntity> blockEntities =
+                chunk.BlockEntities;
+
+            if (
+                blockEntities == null ||
+                blockEntities.Count == 0
+            )
+            {
+                return;
+            }
+
+            foreach (
+                KeyValuePair<BlockPos, BlockEntity> pair
+                in blockEntities
+            )
+            {
+                if (
+                    pair.Value is not BlockEntitySpawner spawner ||
+                    !IsTraderSpawner(spawner)
+                )
+                {
+                    continue;
+                }
+
+                BlockPos spawnPosition =
+                    spawner.Pos ?? pair.Key;
+
+                if (spawnPosition == null)
+                {
+                    continue;
+                }
+
+                GeneratedStructure? structure =
+                    FindTraderStructure(
+                        structures,
+                        spawnPosition.X + 0.5,
+                        spawnPosition.Y,
+                        spawnPosition.Z + 0.5
+                    );
+
+                AddVerifiedTraderSite(
+                    structure,
+                    sites,
+                    siteIds
+                );
+            }
+        }
+
+        private static bool IsTraderSpawner(
+            BlockEntitySpawner spawner
+        )
+        {
+            string[] entityCodes =
+                spawner.Data?.EntityCodes;
+
+            if (
+                entityCodes == null ||
+                entityCodes.Length == 0
+            )
+            {
+                return false;
+            }
+
+            foreach (string entityCode in entityCodes)
+            {
+                if (
+                    !string.IsNullOrWhiteSpace(entityCode) &&
+                    entityCode.Contains(
+                        "trader",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void InspectSpawnedTraders(
+            IServerChunk chunk,
+            IEnumerable<GeneratedStructure> structures,
+            ICollection<RumorSite> sites,
+            ISet<string> siteIds
+        )
+        {
+            Entity[] entities = chunk.Entities;
+            int entityCount = Math.Min(
+                chunk.EntitiesCount,
+                entities?.Length ?? 0
+            );
+
+            for (int index = 0;
+                index < entityCount;
+                index++)
+            {
+                if (entities[index] is not EntityTrader trader)
+                {
+                    continue;
+                }
+
+                double spawnX =
+                    trader.Attributes.HasAttribute("spawnX")
+                        ? trader.Attributes.GetDouble("spawnX")
+                        : trader.Pos.X;
+
+                double spawnY =
+                    trader.Attributes.HasAttribute("spawnY")
+                        ? trader.Attributes.GetDouble("spawnY")
+                        : trader.Pos.Y;
+
+                double spawnZ =
+                    trader.Attributes.HasAttribute("spawnZ")
+                        ? trader.Attributes.GetDouble("spawnZ")
+                        : trader.Pos.Z;
+
+                GeneratedStructure? structure =
+                    FindTraderStructure(
+                        structures,
+                        spawnX,
+                        spawnY,
+                        spawnZ
+                    );
+
+                AddVerifiedTraderSite(
+                    structure,
+                    sites,
+                    siteIds
+                );
+            }
+        }
+
+        private void AddVerifiedTraderSite(
+            GeneratedStructure? structure,
+            ICollection<RumorSite> sites,
+            ISet<string> siteIds
+        )
+        {
+            if (structure == null)
+            {
+                return;
+            }
+
+            RumorSite site = CreateVerifiedSite(
+                structure,
+                StructureKind.Trader
+            );
+
+            if (siteIds.Add(site.Id))
+            {
+                sites.Add(site);
+            }
+        }
+
+'''
+
+          text = text[:start] + replacement + text[end:]
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add RumorNetwork/Catalog/VerifiedStructureDiscoveryService.cs
+          git commit -m "Validate trader structures through their respawn spawners"
+          git push
