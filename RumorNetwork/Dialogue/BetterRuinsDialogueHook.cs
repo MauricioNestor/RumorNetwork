@@ -47,6 +47,8 @@ namespace RumorNetwork.Dialogue
                 "dialogue"
             );
 
+        private static bool betterRuinsModPresent;
+
         private Harmony? harmony;
 
         public override double ExecuteOrder()
@@ -56,6 +58,11 @@ namespace RumorNetwork.Dialogue
 
         public override void Start(ICoreAPI api)
         {
+            betterRuinsModPresent =
+                api.ModLoader.IsModEnabled(
+                    BetterRuinsRumorPolicy.ModId
+                );
+
             harmony = new Harmony(HarmonyId);
 
             MethodInfo? execute = AccessTools.Method(
@@ -85,6 +92,7 @@ namespace RumorNetwork.Dialogue
         {
             harmony?.UnpatchAll(HarmonyId);
             harmony = null;
+            betterRuinsModPresent = false;
             base.Dispose();
         }
 
@@ -92,7 +100,10 @@ namespace RumorNetwork.Dialogue
             DlgTalkComponent __instance
         )
         {
-            if (!BetterRuinsRumorPolicy.DedicatedAvailable)
+            if (
+                !betterRuinsModPresent ||
+                !RumorRuntimeSettings.BetterRuins.Enabled
+            )
             {
                 return;
             }
@@ -163,6 +174,11 @@ namespace RumorNetwork.Dialogue
                 Array.Empty<DialogeTextElement>()
             );
 
+            int nextId = answers
+                .Select(answer => answer.Id)
+                .DefaultIfEmpty(-1)
+                .Max() + 1;
+
             int cancelIndex = answers.FindIndex(answer =>
                 string.Equals(
                     answer.Value,
@@ -173,6 +189,7 @@ namespace RumorNetwork.Dialogue
 
             DialogeTextElement choice = new()
             {
+                Id = nextId,
                 Value = RumorText.Get(
                     "dialogue-rumor-betterruins-pay"
                 ),
