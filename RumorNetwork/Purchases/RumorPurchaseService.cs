@@ -16,20 +16,20 @@ namespace RumorNetwork.Purchases
         private readonly RumorInventoryPaymentService
             paymentService;
 
-        private readonly SelectiveStructureCatalogService
-            catalogService;
+        private readonly VerifiedStructureDiscoveryService
+            discoveryService;
 
         public RumorPurchaseService(
             RumorDeliveryService deliveryService,
             RumorPriceResolver priceResolver,
             RumorInventoryPaymentService paymentService,
-            SelectiveStructureCatalogService catalogService
+            VerifiedStructureDiscoveryService discoveryService
         )
         {
             this.deliveryService = deliveryService;
             this.priceResolver = priceResolver;
             this.paymentService = paymentService;
-            this.catalogService = catalogService;
+            this.discoveryService = discoveryService;
         }
 
         public bool TryPurchase(
@@ -42,7 +42,12 @@ namespace RumorNetwork.Purchases
             result = null;
             error = string.Empty;
 
-            catalogService.RequestBackfillAround(
+            // General rumors remain immediately purchasable. This starts
+            // verified translocator discovery in the background so remote
+            // translocators enter later draws without blocking ordinary
+            // ruins and sites.
+            discoveryService.RequestAdditional(
+                StructureKind.Translocator,
                 (int)player.Entity.Pos.X,
                 (int)player.Entity.Pos.Z
             );
@@ -60,12 +65,12 @@ namespace RumorNetwork.Purchases
                 preparedDelivery == null
             )
             {
-                error = catalogService.IsWorking
+                error = discoveryService.IsWorking
                     ? preparationError +
-                        " O catálogo remoto ainda está " +
-                        "verificando traders e translocadores " +
-                        $"em {catalogService.PendingRegionCount} " +
-                        "regiões já geradas."
+                        " A descoberta remota ainda está " +
+                        "simulando worldgen sem salvar chunks. " +
+                        $"Peeks ativos={discoveryService.ActivePeekCount} | " +
+                        $"Buscas={discoveryService.ActiveSearchCount}."
                     : preparationError;
 
                 return false;
