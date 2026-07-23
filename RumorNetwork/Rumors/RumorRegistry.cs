@@ -86,6 +86,39 @@ public sealed class RumorRegistry
         return count;
     }
 
+    public int RemoveByKind(
+        params StructureKind[] kinds
+    )
+    {
+        if (kinds == null || kinds.Length == 0)
+        {
+            return 0;
+        }
+
+        HashSet<StructureKind> selectedKinds =
+            new(kinds);
+
+        List<string> idsToRemove = new();
+
+        foreach (
+            KeyValuePair<string, RumorRecord> pair
+            in records
+        )
+        {
+            if (selectedKinds.Contains(pair.Value.Kind))
+            {
+                idsToRemove.Add(pair.Key);
+            }
+        }
+
+        foreach (string id in idsToRemove)
+        {
+            records.Remove(id);
+        }
+
+        return idsToRemove.Count;
+    }
+
     public RumorRegistrySaveData Export()
     {
         return new RumorRegistrySaveData
