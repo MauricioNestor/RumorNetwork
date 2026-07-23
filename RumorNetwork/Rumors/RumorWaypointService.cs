@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -12,38 +12,32 @@ namespace RumorNetwork.Rumors
 {
     public static class RumorWaypointService
     {
-        private const double ApproximateMinimumOffset =
-            128;
+        private const double ApproximateMinimumOffset = 128;
+        private const double ApproximateMaximumOffset = 384;
 
-        private const double ApproximateMaximumOffset =
-            384;
+        private const string ApproximateRuinColor = "#4DA6FF";
+        private const string ExactRuinColor = "#66CC66";
+        private const string TranslocatorColor = "#4DA6FF";
+        private const string TraderColor = "#F2C94C";
 
-        private const string WaypointColor =
-            "#E6B43C";
+        private const string WaypointGuidPrefix = "rumornetwork:";
+        private const string WaypointTitlePrefix = "Rumor:";
 
-        private const string WaypointGuidPrefix =
-            "rumornetwork:";
+        private static readonly MethodInfo? ResendWaypointsMethod =
+            typeof(WaypointMapLayer).GetMethod(
+                "ResendWaypoints",
+                BindingFlags.Instance |
+                BindingFlags.NonPublic |
+                BindingFlags.Public
+            );
 
-        private const string WaypointTitlePrefix =
-            "Rumor:";
-
-        private static readonly MethodInfo?
-            ResendWaypointsMethod =
-                typeof(WaypointMapLayer).GetMethod(
-                    "ResendWaypoints",
-                    BindingFlags.Instance |
-                    BindingFlags.NonPublic |
-                    BindingFlags.Public
-                );
-
-        private static readonly MethodInfo?
-            RebuildMapComponentsMethod =
-                typeof(WaypointMapLayer).GetMethod(
-                    "RebuildMapComponents",
-                    BindingFlags.Instance |
-                    BindingFlags.NonPublic |
-                    BindingFlags.Public
-                );
+        private static readonly MethodInfo? RebuildMapComponentsMethod =
+            typeof(WaypointMapLayer).GetMethod(
+                "RebuildMapComponents",
+                BindingFlags.Instance |
+                BindingFlags.NonPublic |
+                BindingFlags.Public
+            );
 
         public static bool TryAddWaypoints(
             ICoreServerAPI api,
@@ -63,16 +57,12 @@ namespace RumorNetwork.Rumors
                 knowledge,
                 resolution,
                 random,
-                out IReadOnlyList<RumorWaypointHandle>
-                    waypointHandles,
+                out IReadOnlyList<RumorWaypointHandle> waypointHandles,
                 out error
             );
 
             waypointPositions = waypointHandles
-                .Select(
-                    handle =>
-                        handle.Position
-                )
+                .Select(handle => handle.Position)
                 .ToList()
                 .AsReadOnly();
 
@@ -86,44 +76,40 @@ namespace RumorNetwork.Rumors
             RumorKnowledgeLevel knowledge,
             RumorTargetResolution resolution,
             Random random,
-            out IReadOnlyList<RumorWaypointHandle>
-                waypointHandles,
+            out IReadOnlyList<RumorWaypointHandle> waypointHandles,
             out string error
         )
         {
-            List<RumorWaypointHandle> addedHandles =
-                new();
-
-            waypointHandles =
-                addedHandles.AsReadOnly();
-
+            List<RumorWaypointHandle> addedHandles = new();
+            waypointHandles = addedHandles.AsReadOnly();
             error = string.Empty;
 
-            if (!TryGetWaypointLayer(
+            if (
+                !TryGetWaypointLayer(
                     api,
                     out WaypointMapLayer? waypointLayer,
                     out error
-                ) || waypointLayer == null)
+                ) ||
+                waypointLayer == null
+            )
             {
                 return false;
             }
 
-            IReadOnlyList<RumorTarget> targets =
-                SelectTargets(
-                    resolution,
-                    knowledge
-                );
+            IReadOnlyList<RumorTarget> targets = SelectTargets(
+                resolution,
+                knowledge
+            );
 
             try
             {
                 foreach (RumorTarget target in targets)
                 {
-                    Vec3d waypointPosition =
-                        CreateWaypointPosition(
-                            target.Position,
-                            knowledge,
-                            random
-                        );
+                    Vec3d waypointPosition = CreateWaypointPosition(
+                        target.Position,
+                        knowledge,
+                        random
+                    );
 
                     string waypointGuid =
                         WaypointGuidPrefix +
@@ -131,28 +117,14 @@ namespace RumorNetwork.Rumors
 
                     Waypoint waypoint = new()
                     {
-                        Color =
-                            ColorUtil.Hex2Int(
-                                WaypointColor
-                            ),
-
-                        Icon =
-                            CreateIcon(target.Kind),
-
-                        Pinned = true,
-
-                        Position =
-                            waypointPosition,
-
-                        OwningPlayerUid =
-                            player.PlayerUID,
-
-                        Title = CreateTitle(
-                            record,
-                            knowledge,
-                            target.Kind
+                        Color = ColorUtil.Hex2Int(
+                            CreateColor(record, knowledge)
                         ),
-
+                        Icon = CreateIcon(record),
+                        Pinned = true,
+                        Position = waypointPosition,
+                        OwningPlayerUid = player.PlayerUID,
+                        Title = CreateTitle(record, knowledge),
                         Guid = waypointGuid
                     };
 
@@ -176,10 +148,7 @@ namespace RumorNetwork.Rumors
                     TryRemoveWaypoints(
                         api,
                         player,
-                        addedHandles.Select(
-                            handle =>
-                                handle.Guid
-                        ),
+                        addedHandles.Select(handle => handle.Guid),
                         out _,
                         out _
                     );
@@ -188,16 +157,12 @@ namespace RumorNetwork.Rumors
                 error =
                     "Não foi possível adicionar os " +
                     "waypoints do rumor: " +
-                    exception
-                        .GetBaseException()
-                        .Message;
+                    exception.GetBaseException().Message;
 
                 return false;
             }
 
-            waypointHandles =
-                addedHandles.AsReadOnly();
-
+            waypointHandles = addedHandles.AsReadOnly();
             return true;
         }
 
@@ -212,31 +177,29 @@ namespace RumorNetwork.Rumors
             removedCount = 0;
             error = string.Empty;
 
-            if (!TryGetWaypointLayer(
+            if (
+                !TryGetWaypointLayer(
                     api,
                     out WaypointMapLayer? waypointLayer,
                     out error
-                ) || waypointLayer == null)
+                ) ||
+                waypointLayer == null
+            )
             {
                 return false;
             }
 
-            HashSet<string> requestedGuids =
-                new(
-                    waypointGuids,
-                    StringComparer.Ordinal
-                );
+            HashSet<string> requestedGuids = new(
+                waypointGuids,
+                StringComparer.Ordinal
+            );
 
-            removedCount =
-                waypointLayer.Waypoints.RemoveAll(
-                    waypoint =>
-                        waypoint.OwningPlayerUid
-                            == player.PlayerUID &&
-                        waypoint.Guid != null &&
-                        requestedGuids.Contains(
-                            waypoint.Guid
-                        )
-                );
+            removedCount = waypointLayer.Waypoints.RemoveAll(
+                waypoint =>
+                    waypoint.OwningPlayerUid == player.PlayerUID &&
+                    waypoint.Guid != null &&
+                    requestedGuids.Contains(waypoint.Guid)
+            );
 
             return TrySynchronizeWaypointLayer(
                 waypointLayer,
@@ -256,22 +219,23 @@ namespace RumorNetwork.Rumors
             removedCount = 0;
             error = string.Empty;
 
-            if (!TryGetWaypointLayer(
+            if (
+                !TryGetWaypointLayer(
                     api,
                     out WaypointMapLayer? waypointLayer,
                     out error
-                ) || waypointLayer == null)
+                ) ||
+                waypointLayer == null
+            )
             {
                 return false;
             }
 
-            removedCount =
-                waypointLayer.Waypoints.RemoveAll(
-                    waypoint =>
-                        waypoint.OwningPlayerUid
-                            == player.PlayerUID &&
-                        IsRumorWaypoint(waypoint)
-                );
+            removedCount = waypointLayer.Waypoints.RemoveAll(
+                waypoint =>
+                    waypoint.OwningPlayerUid == player.PlayerUID &&
+                    IsRumorWaypoint(waypoint)
+            );
 
             return TrySynchronizeWaypointLayer(
                 waypointLayer,
@@ -327,9 +291,7 @@ namespace RumorNetwork.Rumors
                 error =
                     "A camada do mapa não pôde ser " +
                     "atualizada: " +
-                    exception
-                        .GetBaseException()
-                        .Message;
+                    exception.GetBaseException().Message;
 
                 return false;
             }
@@ -344,27 +306,18 @@ namespace RumorNetwork.Rumors
             waypointLayer = null;
             error = string.Empty;
 
-            if (
-                !api.World.Config.GetBool(
-                    "allowMap",
-                    true
-                )
-            )
+            if (!api.World.Config.GetBool("allowMap", true))
             {
-                error =
-                    "O mapa está desativado neste mundo.";
-
+                error = "O mapa está desativado neste mundo.";
                 return false;
             }
 
-            WorldMapManager mapManager =
-                api.ModLoader
-                    .GetModSystem<WorldMapManager>();
+            WorldMapManager mapManager = api.ModLoader
+                .GetModSystem<WorldMapManager>();
 
-            waypointLayer =
-                mapManager.MapLayers
-                    .OfType<WaypointMapLayer>()
-                    .FirstOrDefault();
+            waypointLayer = mapManager.MapLayers
+                .OfType<WaypointMapLayer>()
+                .FirstOrDefault();
 
             if (waypointLayer == null)
             {
@@ -382,31 +335,25 @@ namespace RumorNetwork.Rumors
             Waypoint waypoint
         )
         {
-            bool taggedGuid =
-                waypoint.Guid?.StartsWith(
-                    WaypointGuidPrefix,
-                    StringComparison.Ordinal
-                ) == true;
+            bool taggedGuid = waypoint.Guid?.StartsWith(
+                WaypointGuidPrefix,
+                StringComparison.Ordinal
+            ) == true;
 
-            bool legacyTitle =
-                waypoint.Title?.StartsWith(
-                    WaypointTitlePrefix,
-                    StringComparison.Ordinal
-                ) == true;
+            bool legacyTitle = waypoint.Title?.StartsWith(
+                WaypointTitlePrefix,
+                StringComparison.Ordinal
+            ) == true;
 
             return taggedGuid || legacyTitle;
         }
 
-        private static IReadOnlyList<RumorTarget>
-            SelectTargets(
-                RumorTargetResolution resolution,
-                RumorKnowledgeLevel knowledge
-            )
+        private static IReadOnlyList<RumorTarget> SelectTargets(
+            RumorTargetResolution resolution,
+            RumorKnowledgeLevel knowledge
+        )
         {
-            if (
-                knowledge
-                == RumorKnowledgeLevel.Approximate
-            )
+            if (knowledge == RumorKnowledgeLevel.Approximate)
             {
                 return new[]
                 {
@@ -414,32 +361,25 @@ namespace RumorNetwork.Rumors
                 };
             }
 
+            // Exact underground-ruin rumors retain both the cave entrance
+            // and the structure entrance supplied by RumorTargetResolver.
             return resolution.Targets;
         }
 
-        private static Vec3d
-            CreateWaypointPosition(
-                Vec3d resolvedPosition,
-                RumorKnowledgeLevel knowledge,
-                Random random
-            )
+        private static Vec3d CreateWaypointPosition(
+            Vec3d resolvedPosition,
+            RumorKnowledgeLevel knowledge,
+            Random random
+        )
         {
-            Vec3d position =
-                resolvedPosition.Clone();
+            Vec3d position = resolvedPosition.Clone();
 
-            if (
-                knowledge
-                != RumorKnowledgeLevel.Approximate
-            )
+            if (knowledge != RumorKnowledgeLevel.Approximate)
             {
                 return position;
             }
 
-            double angle =
-                random.NextDouble() *
-                Math.PI *
-                2;
-
+            double angle = random.NextDouble() * Math.PI * 2;
             double distance =
                 ApproximateMinimumOffset +
                 random.NextDouble() *
@@ -448,92 +388,80 @@ namespace RumorNetwork.Rumors
                     ApproximateMinimumOffset
                 );
 
-            position.X +=
-                Math.Cos(angle) * distance;
-
-            position.Z +=
-                Math.Sin(angle) * distance;
+            position.X += Math.Cos(angle) * distance;
+            position.Z += Math.Sin(angle) * distance;
 
             return position;
         }
 
-        private static string CreateIcon(
-            RumorTargetKind targetKind
-        )
-        {
-            return targetKind switch
-            {
-                RumorTargetKind.CaveEntrance =>
-                    "cave",
-
-                RumorTargetKind.StructureEntrance =>
-                    "ruins",
-
-                _ =>
-                    "circle"
-            };
-        }
-
-        private static string CreateTitle(
+        private static string CreateColor(
             RumorRecord record,
-            RumorKnowledgeLevel knowledge,
-            RumorTargetKind targetKind
+            RumorKnowledgeLevel knowledge
         )
         {
-            string locationName = targetKind switch
+            return record.Kind switch
             {
-                RumorTargetKind.CaveEntrance =>
-                    "entrada da caverna",
-
-                RumorTargetKind.StructureEntrance =>
-                    "ruínas subterrâneas",
-
-                _ =>
-                    CreateLocationName(record)
+                StructureKind.Trader => TraderColor,
+                StructureKind.Translocator => TranslocatorColor,
+                _ when knowledge == RumorKnowledgeLevel.Approximate =>
+                    ApproximateRuinColor,
+                _ => ExactRuinColor
             };
-
-            string precision =
-                knowledge
-                == RumorKnowledgeLevel.Approximate
-                    ? "local aproximado"
-                    : "local exato";
-
-            return
-                $"{WaypointTitlePrefix} " +
-                $"{locationName} — " +
-                precision;
         }
 
-        private static string CreateLocationName(
+        private static string CreateIcon(
             RumorRecord record
         )
         {
             return record.Kind switch
             {
-                StructureKind.Trader =>
-                    "comerciante",
-
-                StructureKind.Vug =>
-                    record.Family,
-
-                StructureKind.RuinedVillage =>
-                    "vila em ruínas",
-
-                StructureKind.SurfaceRuin =>
-                    "ruínas na superfície",
-
-                StructureKind.UndergroundRuin =>
-                    "ruínas subterrâneas",
-
-                StructureKind.BetterRuin =>
-                    "ruínas antigas",
-
-                StructureKind.Translocator =>
-                    "translocador",
-
-                _ =>
-                    record.Kind.ToString()
+                StructureKind.Trader => "trader",
+                StructureKind.Translocator => "translocator",
+                StructureKind.UndergroundRuin => "ruins",
+                StructureKind.BetterRuin => "ruins",
+                StructureKind.SurfaceRuin => "ruins",
+                StructureKind.RuinedVillage => "ruins",
+                _ => "circle"
             };
+        }
+
+        private static string CreateTitle(
+            RumorRecord record,
+            RumorKnowledgeLevel knowledge
+        )
+        {
+            if (record.Kind == StructureKind.Trader)
+            {
+                return "Rumor: Trader";
+            }
+
+            if (record.Kind == StructureKind.Translocator)
+            {
+                return "Rumor: Translocator";
+            }
+
+            string precision =
+                knowledge == RumorKnowledgeLevel.Approximate
+                    ? "Approximate"
+                    : "Exact";
+
+            if (IsRuin(record.Kind))
+            {
+                return $"Rumor: Ruins - {precision}";
+            }
+
+            return $"Rumor: {record.Kind} - {precision}";
+        }
+
+        private static bool IsRuin(
+            StructureKind kind
+        )
+        {
+            return kind is
+                StructureKind.UndergroundRuin or
+                StructureKind.BetterRuin or
+                StructureKind.SurfaceRuin or
+                StructureKind.RuinedVillage;
         }
     }
 }
