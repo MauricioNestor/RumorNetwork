@@ -181,7 +181,7 @@ namespace RumorNetwork.Dialogue
                 .Concat(additions)
                 .ToArray();
 
-            __instance.Dialog?.Api?.Logger.Notification(
+            Console.WriteLine(
                 "Rumor Network injetou opções de rumores no " +
                 $"diálogo {loc}."
             );
