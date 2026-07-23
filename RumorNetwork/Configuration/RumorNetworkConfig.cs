@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Newtonsoft.Json;
 using RumorNetwork.Rumors;
 
 namespace RumorNetwork.Configuration
@@ -7,12 +8,24 @@ namespace RumorNetwork.Configuration
     {
         public int Version;
 
+        [JsonProperty(
+            ObjectCreationHandling =
+                ObjectCreationHandling.Replace
+        )]
         public RumorPricingConfig Pricing =
             RumorPricingConfig.CreateDefault();
 
+        [JsonProperty(
+            ObjectCreationHandling =
+                ObjectCreationHandling.Replace
+        )]
         public TraderLocationRumorConfig TraderLocations =
             TraderLocationRumorConfig.CreateDefault();
 
+        [JsonProperty(
+            ObjectCreationHandling =
+                ObjectCreationHandling.Replace
+        )]
         public RemoteStructureCatalogConfig RemoteCatalog =
             RemoteStructureCatalogConfig.CreateDefault();
 
@@ -39,25 +52,59 @@ namespace RumorNetwork.Configuration
                     .MaxLocationsSoldPerTrader = 2;
             }
 
+            if (Version < 4)
+            {
+                // Older config files were populated into the field
+                // initializer collections by Json.NET. Every reload could
+                // append another 4-gear component, producing prices such
+                // as 8, 12 and 16 gears. Reset once and use replacement
+                // collection semantics from now on.
+                TraderLocations.ExactPrice =
+                    RumorPriceConfig.Single(
+                        "game:gear-rusty",
+                        4
+                    );
+
+                RemoteCatalog.ScanOnPlayerReady = false;
+                RemoteCatalog.PeekIntervalMs = 250;
+                RemoteCatalog.MaxConcurrentPeeks = 1;
+                RemoteCatalog.MaxPeekColumnsPerSearch = 2048;
+                RemoteCatalog.MaxSearchRadiusChunks = 96;
+                RemoteCatalog.PauseWhenGeneratingChunksAbove = 8;
+                RemoteCatalog.StopAfterNewTargets = 1;
+            }
+
             Pricing.Normalize();
             TraderLocations.Normalize();
             RemoteCatalog.Normalize();
 
-            Version = 3;
+            Version = 4;
         }
     }
 
     public sealed class RumorPricingConfig
     {
+        [JsonProperty(
+            ObjectCreationHandling =
+                ObjectCreationHandling.Replace
+        )]
         public RumorPriceConfig Fallback =
             RumorPriceConfig.Single(
                 "game:gear-rusty",
                 1
             );
 
+        [JsonProperty(
+            ObjectCreationHandling =
+                ObjectCreationHandling.Replace
+        )]
         public Dictionary<string, RumorPriceConfig>
             KnowledgeDefaults = new();
 
+        [JsonProperty(
+            ObjectCreationHandling =
+                ObjectCreationHandling.Replace
+        )]
         public Dictionary<string, RumorStructurePriceConfig>
             Structures = new();
 
@@ -131,6 +178,10 @@ namespace RumorNetwork.Configuration
 
         public int MaxLocationsSoldPerTrader = 2;
 
+        [JsonProperty(
+            ObjectCreationHandling =
+                ObjectCreationHandling.Replace
+        )]
         public RumorPriceConfig ExactPrice =
             RumorPriceConfig.Single(
                 "game:gear-rusty",
@@ -169,11 +220,26 @@ namespace RumorNetwork.Configuration
     {
         public bool Enabled = true;
 
-        public bool ScanOnPlayerReady = true;
+        // Legacy backfill settings are retained so old config files and
+        // the retired scanner remain binary/source compatible.
+        public bool ScanOnPlayerReady = false;
 
         public int BackfillRadiusRegions = 24;
 
         public int ConcurrentRegionChecks = 4;
+
+        // Verified discovery settings.
+        public int PeekIntervalMs = 250;
+
+        public int MaxConcurrentPeeks = 1;
+
+        public int MaxPeekColumnsPerSearch = 2048;
+
+        public int MaxSearchRadiusChunks = 96;
+
+        public int PauseWhenGeneratingChunksAbove = 8;
+
+        public int StopAfterNewTargets = 1;
 
         public static RemoteStructureCatalogConfig
             CreateDefault()
@@ -197,13 +263,66 @@ namespace RumorNetwork.Configuration
             {
                 ConcurrentRegionChecks = 16;
             }
+
+            if (PeekIntervalMs < 25)
+            {
+                PeekIntervalMs = 25;
+            }
+
+            if (MaxConcurrentPeeks <= 0)
+            {
+                MaxConcurrentPeeks = 1;
+            }
+
+            if (MaxConcurrentPeeks > 4)
+            {
+                MaxConcurrentPeeks = 4;
+            }
+
+            if (MaxPeekColumnsPerSearch <= 0)
+            {
+                MaxPeekColumnsPerSearch = 2048;
+            }
+
+            if (MaxSearchRadiusChunks <= 0)
+            {
+                MaxSearchRadiusChunks = 96;
+            }
+
+            if (MaxSearchRadiusChunks > 1024)
+            {
+                MaxSearchRadiusChunks = 1024;
+            }
+
+            if (PauseWhenGeneratingChunksAbove < 0)
+            {
+                PauseWhenGeneratingChunksAbove = 0;
+            }
+
+            if (StopAfterNewTargets <= 0)
+            {
+                StopAfterNewTargets = 1;
+            }
+
+            if (StopAfterNewTargets > 8)
+            {
+                StopAfterNewTargets = 8;
+            }
         }
     }
 
     public sealed class RumorStructurePriceConfig
     {
+        [JsonProperty(
+            ObjectCreationHandling =
+                ObjectCreationHandling.Replace
+        )]
         public RumorPriceConfig? Approximate;
 
+        [JsonProperty(
+            ObjectCreationHandling =
+                ObjectCreationHandling.Replace
+        )]
         public RumorPriceConfig? Exact;
 
         public RumorPriceConfig? Get(
@@ -232,6 +351,10 @@ namespace RumorNetwork.Configuration
 
     public sealed class RumorPriceConfig
     {
+        [JsonProperty(
+            ObjectCreationHandling =
+                ObjectCreationHandling.Replace
+        )]
         public List<RumorPriceItemConfig> Items =
             new();
 
