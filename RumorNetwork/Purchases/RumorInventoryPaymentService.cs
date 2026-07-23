@@ -59,7 +59,8 @@ namespace RumorNetwork.Purchases
                 int remaining =
                     component.Stack.StackSize;
 
-                player.Entity.WalkInventory(
+                WalkOwnedInventorySlots(
+                    player,
                     slot =>
                     {
                         if (remaining <= 0)
@@ -241,7 +242,8 @@ namespace RumorNetwork.Purchases
         {
             int count = 0;
 
-            player.Entity.WalkInventory(
+            WalkOwnedInventorySlots(
+                player,
                 slot =>
                 {
                     ItemStack? ownedStack =
@@ -265,6 +267,50 @@ namespace RumorNetwork.Purchases
             );
 
             return count;
+        }
+
+        private static void WalkOwnedInventorySlots(
+            IServerPlayer player,
+            Func<ItemSlot, bool> handler
+        )
+        {
+            foreach (
+                InventoryBase inventory
+                in player.InventoryManager.InventoriesOrdered
+            )
+            {
+                if (
+                    inventory is not InventoryBasePlayer ||
+                    string.Equals(
+                        inventory.ClassName,
+                        "creative",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                {
+                    continue;
+                }
+
+                for (
+                    int slotIndex = 0;
+                    slotIndex < inventory.Count;
+                    slotIndex++
+                )
+                {
+                    ItemSlot? slot =
+                        inventory[slotIndex];
+
+                    if (slot == null)
+                    {
+                        continue;
+                    }
+
+                    if (!handler(slot))
+                    {
+                        return;
+                    }
+                }
+            }
         }
 
         private static bool Matches(
