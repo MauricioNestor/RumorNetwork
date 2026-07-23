@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
+using RumorNetwork.Configuration;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Server;
@@ -355,34 +356,48 @@ namespace RumorNetwork.Dialogue
             bool rumorChoiceExists
         )
         {
-            if (traderChoiceExists && rumorChoiceExists)
-            {
-                return;
-            }
+            bool traderEnabled =
+                RumorRuntimeSettings
+                    .Current
+                    .TraderLocations
+                    .Enabled;
+
+            GeneralRumorConfig general =
+                RumorRuntimeSettings.GeneralRumors;
+
+            bool rumorEnabled =
+                general.Enabled &&
+                (
+                    general.ApproximateEnabled ||
+                    general.ExactEnabled ||
+                    general.TranslocatorEnabled
+                );
 
             List<DialogeTextElement> answers = new(
                 root.Text ??
                 Array.Empty<DialogeTextElement>()
             );
 
-            if (!traderChoiceExists)
+            if (!traderChoiceExists && traderEnabled)
             {
                 answers.Add(new DialogeTextElement
                 {
                     Id = nextId++,
-                    Value =
-                        "Do you know any other traders around?",
+                    Value = RumorText.Get(
+                        "dialogue-root-trader-choice"
+                    ),
                     JumpTo = TraderCheckCode
                 });
             }
 
-            if (!rumorChoiceExists)
+            if (!rumorChoiceExists && rumorEnabled)
             {
                 answers.Add(new DialogeTextElement
                 {
                     Id = nextId++,
-                    Value =
-                        "Have you heard any rumors lately?",
+                    Value = RumorText.Get(
+                        "dialogue-root-rumor-choice"
+                    ),
                     JumpTo = RumorRootCode
                 });
             }
