@@ -72,6 +72,8 @@ namespace RumorNetwork.Configuration
 
         public bool AllowApproximateToExactUpgrade = false;
 
+        public int LocalRegionSearchRadius = 1;
+
         [JsonProperty(
             ObjectCreationHandling =
                 ObjectCreationHandling.Replace
@@ -154,6 +156,16 @@ namespace RumorNetwork.Configuration
 
         public void Normalize()
         {
+            if (LocalRegionSearchRadius < 0)
+            {
+                LocalRegionSearchRadius = 0;
+            }
+
+            if (LocalRegionSearchRadius > 16)
+            {
+                LocalRegionSearchRadius = 16;
+            }
+
             Structures ??= new();
 
             foreach (
