@@ -39,7 +39,8 @@ namespace RumorNetwork.Commands
                 .BeginSubCommand("index")
                 .WithDescription(
                     "Adiciona ao registro persistente os locais " +
-                    "elegíveis das regiões carregadas."
+                    "elegíveis das regiões carregadas. Traders e " +
+                    "translocadores exigem validação física."
                 )
                 .RequiresPlayer()
                 .RequiresPrivilege(Privilege.chat)
@@ -73,10 +74,25 @@ namespace RumorNetwork.Commands
                         out int loadedRegionCount
                     );
 
-            List<RumorSite> sites =
+            List<RumorSite> builtSites =
                 RumorSiteBuilder.Build(
                     structures
                 );
+
+            List<RumorSite> sites = new();
+
+            foreach (RumorSite site in builtSites)
+            {
+                if (
+                    site.Kind == StructureKind.Trader ||
+                    site.Kind == StructureKind.Translocator
+                )
+                {
+                    continue;
+                }
+
+                sites.Add(site);
+            }
 
             int addedCount =
                 rumorRegistry.Merge(sites);
@@ -97,6 +113,8 @@ namespace RumorNetwork.Commands
                 $"{MaximumRegionCount} | " +
                 $"Structures={structures.Count} | " +
                 $"Sites={sites.Count} | " +
+                $"RemoteCandidatesSkipped=" +
+                $"{builtSites.Count - sites.Count} | " +
                 $"Added={addedCount} | " +
                 $"Registry={rumorRegistry.Count} | " +
                 $"Traders={traderCount} | " +
@@ -106,8 +124,8 @@ namespace RumorNetwork.Commands
             return TextCommandResult.Success(
                 $"{addedCount} novos locais adicionados. " +
                 $"Registro total: {rumorRegistry.Count}. " +
-                $"Traders: {traderCount}. " +
-                $"Translocators: {translocatorCount}."
+                $"Traders verificados: {traderCount}. " +
+                $"Translocators verificados: {translocatorCount}."
             );
         }
 
@@ -149,11 +167,11 @@ namespace RumorNetwork.Commands
             );
 
             logger.Notification(
-                $"Traders: {traders}"
+                $"Traders verificados: {traders}"
             );
 
             logger.Notification(
-                $"Translocators: {translocators}"
+                $"Translocators verificados: {translocators}"
             );
 
             logger.Notification(
@@ -170,8 +188,8 @@ namespace RumorNetwork.Commands
 
             return TextCommandResult.Success(
                 $"{rumorRegistry.Count} rumores registrados. " +
-                $"Traders={traders} | " +
-                $"Translocators={translocators}."
+                $"Traders verificados={traders} | " +
+                $"Translocators verificados={translocators}."
             );
         }
     }
