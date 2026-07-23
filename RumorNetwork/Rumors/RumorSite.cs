@@ -1,4 +1,4 @@
-﻿using Vintagestory.API.MathTools;
+using Vintagestory.API.MathTools;
 
 namespace RumorNetwork.Rumors;
 
@@ -12,6 +12,8 @@ public sealed class RumorSite
 
     public string SourceCode { get; }
 
+    public string SourceGroup { get; }
+
     public Cuboidi Location { get; }
 
     public int PartCount { get; }
@@ -23,6 +25,7 @@ public sealed class RumorSite
         StructureKind kind,
         string family,
         string sourceCode,
+        string sourceGroup,
         Cuboidi location,
         int partCount
     )
@@ -31,6 +34,7 @@ public sealed class RumorSite
         Kind = kind;
         Family = family;
         SourceCode = sourceCode;
+        SourceGroup = sourceGroup;
         Location = location;
         PartCount = partCount;
     }
