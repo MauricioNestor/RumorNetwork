@@ -13,9 +13,14 @@ namespace RumorNetwork
 {
     public class RumorNetworkModSystem : ModSystem
     {
-        private const string RumorRegistrySaveKey = "rumornetwork:registry-v1";
-        private const string TraderKnowledgeSaveKey = "rumornetwork:trader-knowledge-v1";
-        private const string RemoteCatalogSaveKey = "rumornetwork:remote-catalog-v1";
+        private const string RumorRegistrySaveKey =
+            "rumornetwork:registry-v1";
+
+        private const string TraderKnowledgeSaveKey =
+            "rumornetwork:trader-knowledge-v1";
+
+        private const string VerifiedDiscoverySaveKey =
+            "rumornetwork:verified-discovery-v1";
 
         private readonly RumorRegistry rumorRegistry = new();
         private readonly TraderKnowledgeRegistry traderKnowledgeRegistry = new();
@@ -26,8 +31,7 @@ namespace RumorNetwork
         private RumorPurchaseService rumorPurchaseService = null!;
         private RumorOfferService rumorOfferService = null!;
         private TraderLocationPurchaseService traderLocationPurchaseService = null!;
-        private SelectiveStructureCatalogService selectiveCatalogService = null!;
-        private ProgressiveStructureCatalogSearchService progressiveCatalogSearchService = null!;
+        private VerifiedStructureDiscoveryService discoveryService = null!;
         private CaveCellClassifier caveCellClassifier = null!;
         private CaveBoundaryScanner caveBoundaryScanner = null!;
         private CaveSkyConnectionSearch caveSkyConnectionSearch = null!;
@@ -38,11 +42,34 @@ namespace RumorNetwork
         {
             serverApi = api;
 
-            RumorNetworkConfig config = RumorConfigLoader.Load(api, Mod.Logger);
-            caveCellClassifier = new CaveCellClassifier(api.World.BlockAccessor);
-            caveBoundaryScanner = new CaveBoundaryScanner(api.World.BlockAccessor, caveCellClassifier);
-            caveSkyConnectionSearch = new CaveSkyConnectionSearch(api.World.BlockAccessor, caveCellClassifier);
-            rumorTargetResolver = new RumorTargetResolver(caveBoundaryScanner, caveSkyConnectionSearch);
+            RumorNetworkConfig config =
+                RumorConfigLoader.Load(
+                    api,
+                    Mod.Logger
+                );
+
+            caveCellClassifier =
+                new CaveCellClassifier(
+                    api.World.BlockAccessor
+                );
+
+            caveBoundaryScanner =
+                new CaveBoundaryScanner(
+                    api.World.BlockAccessor,
+                    caveCellClassifier
+                );
+
+            caveSkyConnectionSearch =
+                new CaveSkyConnectionSearch(
+                    api.World.BlockAccessor,
+                    caveCellClassifier
+                );
+
+            rumorTargetResolver =
+                new RumorTargetResolver(
+                    caveBoundaryScanner,
+                    caveSkyConnectionSearch
+                );
 
             rumorDeliveryService = new RumorDeliveryService(
                 api,
@@ -51,22 +78,17 @@ namespace RumorNetwork
                 rumorTargetResolver
             );
 
-            RumorPriceResolver priceResolver = new(api.World, config);
-            RumorInventoryPaymentService paymentService = new(api, Mod.Logger);
+            RumorPriceResolver priceResolver =
+                new(api.World, config);
 
-            selectiveCatalogService = new SelectiveStructureCatalogService(
-                api,
-                Mod.Logger,
-                rumorRegistry,
-                config.RemoteCatalog
-            );
+            RumorInventoryPaymentService paymentService =
+                new(api, Mod.Logger);
 
-            progressiveCatalogSearchService =
-                new ProgressiveStructureCatalogSearchService(
+            discoveryService =
+                new VerifiedStructureDiscoveryService(
                     api,
                     Mod.Logger,
                     rumorRegistry,
-                    selectiveCatalogService,
                     config.RemoteCatalog
                 );
 
@@ -74,24 +96,30 @@ namespace RumorNetwork
                 rumorDeliveryService,
                 priceResolver,
                 paymentService,
-                selectiveCatalogService
+                discoveryService
             );
 
-            rumorOfferService = new RumorOfferService(config, priceResolver);
+            rumorOfferService =
+                new RumorOfferService(
+                    config,
+                    priceResolver
+                );
 
-            TraderLocationSelector traderSelector = new(rumorRegistry);
-            traderLocationPurchaseService = new TraderLocationPurchaseService(
-                api,
-                Mod.Logger,
-                config,
-                rumorTargetResolver,
-                priceResolver,
-                paymentService,
-                traderKnowledgeRegistry,
-                traderSelector,
-                selectiveCatalogService,
-                progressiveCatalogSearchService
-            );
+            TraderLocationSelector traderSelector =
+                new(rumorRegistry);
+
+            traderLocationPurchaseService =
+                new TraderLocationPurchaseService(
+                    api,
+                    Mod.Logger,
+                    config,
+                    rumorTargetResolver,
+                    priceResolver,
+                    paymentService,
+                    traderKnowledgeRegistry,
+                    traderSelector,
+                    discoveryService
+                );
 
             api.Event.SaveGameLoaded += OnSaveGameLoaded;
             api.Event.GameWorldSave += OnGameWorldSave;
@@ -106,47 +134,57 @@ namespace RumorNetwork
                 rumorOfferService,
                 traderLocationPurchaseService,
                 traderKnowledgeRegistry,
-                selectiveCatalogService,
+                discoveryService,
                 caveCellClassifier,
                 caveBoundaryScanner,
                 caveSkyConnectionSearch,
                 RegionSearchRadius
             );
 
-            Mod.Logger.Notification("Rumor Network carregado no servidor.");
+            Mod.Logger.Notification(
+                "Rumor Network carregado no servidor."
+            );
         }
 
         public override void Dispose()
         {
-            progressiveCatalogSearchService?.Stop();
-            selectiveCatalogService?.Stop();
+            discoveryService?.Stop();
             base.Dispose();
         }
 
         private void OnSaveGameLoaded()
         {
-            RumorRegistrySaveData rumorSaveData = serverApi.WorldManager.SaveGame.GetData(
-                RumorRegistrySaveKey,
-                new RumorRegistrySaveData()
-            );
+            RumorRegistrySaveData rumorSaveData =
+                serverApi.WorldManager.SaveGame.GetData(
+                    RumorRegistrySaveKey,
+                    new RumorRegistrySaveData()
+                );
+
             rumorRegistry.Import(rumorSaveData);
 
-            TraderKnowledgeSaveData traderSaveData = serverApi.WorldManager.SaveGame.GetData(
-                TraderKnowledgeSaveKey,
-                new TraderKnowledgeSaveData()
-            );
-            traderKnowledgeRegistry.Import(traderSaveData);
+            TraderKnowledgeSaveData traderSaveData =
+                serverApi.WorldManager.SaveGame.GetData(
+                    TraderKnowledgeSaveKey,
+                    new TraderKnowledgeSaveData()
+                );
 
-            SelectiveStructureCatalogSaveData catalogSaveData = serverApi.WorldManager.SaveGame.GetData(
-                RemoteCatalogSaveKey,
-                new SelectiveStructureCatalogSaveData()
+            traderKnowledgeRegistry.Import(
+                traderSaveData
             );
-            selectiveCatalogService.Import(catalogSaveData);
-            selectiveCatalogService.Start();
-            progressiveCatalogSearchService.Start();
+
+            VerifiedStructureDiscoverySaveData
+                discoverySaveData =
+                    serverApi.WorldManager.SaveGame.GetData(
+                        VerifiedDiscoverySaveKey,
+                        new VerifiedStructureDiscoverySaveData()
+                    );
+
+            discoveryService.Import(discoverySaveData);
+            discoveryService.Start();
 
             Mod.Logger.Notification(
-                $"Rumor Network carregou {rumorRegistry.Count} rumores persistidos."
+                $"Rumor Network carregou " +
+                $"{rumorRegistry.Count} rumores persistidos."
             );
         }
 
@@ -163,8 +201,8 @@ namespace RumorNetwork
             );
 
             serverApi.WorldManager.SaveGame.StoreData(
-                RemoteCatalogSaveKey,
-                selectiveCatalogService.Export()
+                VerifiedDiscoverySaveKey,
+                discoveryService.Export()
             );
         }
     }
