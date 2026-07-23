@@ -21,6 +21,8 @@ namespace RumorNetwork.Traders
         private readonly TraderLocationSelector selector;
         private readonly SelectiveStructureCatalogService
             catalogService;
+        private readonly ProgressiveStructureCatalogSearchService
+            progressiveCatalogSearchService;
 
         public TraderLocationPurchaseService(
             ICoreServerAPI api,
@@ -31,7 +33,9 @@ namespace RumorNetwork.Traders
             RumorInventoryPaymentService paymentService,
             TraderKnowledgeRegistry knowledgeRegistry,
             TraderLocationSelector selector,
-            SelectiveStructureCatalogService catalogService
+            SelectiveStructureCatalogService catalogService,
+            ProgressiveStructureCatalogSearchService
+                progressiveCatalogSearchService
         )
         {
             this.api = api;
@@ -43,6 +47,8 @@ namespace RumorNetwork.Traders
             this.knowledgeRegistry = knowledgeRegistry;
             this.selector = selector;
             this.catalogService = catalogService;
+            this.progressiveCatalogSearchService =
+                progressiveCatalogSearchService;
         }
 
         public bool TryPurchase(
@@ -141,6 +147,12 @@ namespace RumorNetwork.Traders
 
             if (!targetFound || target == null)
             {
+                progressiveCatalogSearchService.RequestAdditional(
+                    StructureKind.Trader,
+                    sellerCenter.X,
+                    sellerCenter.Z
+                );
+
                 int indexedTraderCount =
                     selector.CountIndexedTraders();
 
@@ -149,17 +161,26 @@ namespace RumorNetwork.Traders
                         knowledge
                     );
 
-                error = catalogService.IsWorking
-                    ? "O catálogo está verificando regiões já " +
-                        "geradas para encontrar outros " +
-                        "comerciantes. " +
+                bool searchActive =
+                    progressiveCatalogSearchService.IsSearching(
+                        StructureKind.Trader,
+                        sellerCenter.X,
+                        sellerCenter.Z
+                    );
+
+                error = searchActive
+                    ? "O catálogo está ampliando a busca em " +
+                        "regiões já geradas até encontrar outro " +
+                        "comerciante. " +
                         $"Indexados={indexedTraderCount} | " +
                         $"Conhecidos={knownTraderCount} | " +
-                        $"Pendentes=" +
-                        $"{catalogService.PendingRegionCount}. " +
-                        "Tente novamente em alguns segundos."
+                        $"Pendentes={catalogService.PendingRegionCount} | " +
+                        "Raio atual=" +
+                        $"{progressiveCatalogSearchService.LargestRequestedRadiusRegions} " +
+                        "regiões. Tente novamente quando a busca terminar."
                     : "Não há outro comerciante catalogado que " +
-                        "você ainda não conheça. " +
+                        "você ainda não conheça dentro do limite " +
+                        "da busca automática. " +
                         $"Indexados={indexedTraderCount} | " +
                         $"Conhecidos={knownTraderCount}. " +
                         "Áreas nunca geradas ainda não contêm " +
