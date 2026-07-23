@@ -140,15 +140,18 @@ public static class BetterRuinsRumorPolicy
             return true;
         }
 
+        string sourceCode =
+            record.SourceCode ?? string.Empty;
+
         return
             record.Kind == StructureKind.Translocator ||
             record.Kind == StructureKind.Gate ||
             string.Equals(
-                record.SourceCode,
+                sourceCode,
                 GatesCode,
                 StringComparison.OrdinalIgnoreCase
             ) ||
-            record.SourceCode.Contains(
+            sourceCode.Contains(
                 "translocator",
                 StringComparison.OrdinalIgnoreCase
             );
@@ -159,11 +162,26 @@ public static class BetterRuinsRumorPolicy
             RumorRecord record
         )
     {
-        return RumorRuntimeSettings
-            .BetterRuins
-            .FindCategory(
-                record.SourceCode ?? string.Empty,
-                record.SourceGroup ?? string.Empty
-            );
+        string sourceCode =
+            record.SourceCode ?? string.Empty;
+
+        string sourceGroup =
+            record.SourceGroup ?? string.Empty;
+
+        foreach (
+            BetterRuinsCategoryRuleConfig category
+            in RumorRuntimeSettings.BetterRuins.Categories
+        )
+        {
+            if (category.Matches(
+                    sourceCode,
+                    sourceGroup
+                ))
+            {
+                return category;
+            }
+        }
+
+        return null;
     }
 }
