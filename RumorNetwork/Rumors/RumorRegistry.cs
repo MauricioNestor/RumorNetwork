@@ -22,6 +22,14 @@ public sealed class RumorRegistry
 
         foreach (RumorSite site in sites)
         {
+            // Vanilla "gates" are translocator structures. They are
+            // admitted only after a real BlockStaticTranslocator is found
+            // and are then stored as StructureKind.Translocator.
+            if (site.Kind == StructureKind.Gate)
+            {
+                continue;
+            }
+
             if (records.ContainsKey(site.Id))
             {
                 continue;
@@ -143,7 +151,10 @@ public sealed class RumorRegistry
 
         foreach (RumorRecord record in saveData.Records)
         {
-            if (string.IsNullOrWhiteSpace(record.Id))
+            if (
+                string.IsNullOrWhiteSpace(record.Id) ||
+                record.Kind == StructureKind.Gate
+            )
             {
                 continue;
             }
