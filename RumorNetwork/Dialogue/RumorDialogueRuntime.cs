@@ -3,6 +3,7 @@ using RumorNetwork.Purchases;
 using RumorNetwork.Rumors;
 using RumorNetwork.Traders;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.Server;
 
 namespace RumorNetwork.Dialogue
