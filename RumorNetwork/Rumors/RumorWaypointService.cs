@@ -95,6 +95,18 @@ namespace RumorNetwork.Rumors
                 knowledge
             );
 
+            int? debugToken = null;
+
+            if (RumorRuntimeSettings.Current.Debug?.Enabled == true)
+            {
+                debugToken = RumorDebugDeliveryRegistry.Reserve(
+                    player.PlayerUID,
+                    record,
+                    knowledge,
+                    resolution
+                );
+            }
+
             try
             {
                 foreach (RumorTarget target in targets)
@@ -118,7 +130,11 @@ namespace RumorNetwork.Rumors
                         Pinned = true,
                         Position = waypointPosition,
                         OwningPlayerUid = player.PlayerUID,
-                        Title = CreateTitle(record, knowledge),
+                        Title = CreateTitle(
+                            record,
+                            knowledge,
+                            debugToken
+                        ),
                         Guid = waypointGuid
                     };
 
@@ -148,12 +164,27 @@ namespace RumorNetwork.Rumors
                     );
                 }
 
+                if (debugToken.HasValue)
+                {
+                    RumorDebugDeliveryRegistry.Remove(
+                        debugToken.Value
+                    );
+                }
+
                 error =
                     "Não foi possível adicionar os " +
                     "waypoints do rumor: " +
                     exception.GetBaseException().Message;
 
                 return false;
+            }
+
+            if (debugToken.HasValue)
+            {
+                RumorDebugDeliveryRegistry.Complete(
+                    debugToken.Value,
+                    addedHandles
+                );
             }
 
             waypointHandles = addedHandles.AsReadOnly();
@@ -339,7 +370,12 @@ namespace RumorNetwork.Rumors
                 StringComparison.Ordinal
             ) == true;
 
-            return taggedGuid || legacyTitle;
+            bool debugTitle = waypoint.Title?.StartsWith(
+                "[DBG d",
+                StringComparison.Ordinal
+            ) == true;
+
+            return taggedGuid || legacyTitle || debugTitle;
         }
 
         private static IReadOnlyList<RumorTarget> SelectTargets(
@@ -387,7 +423,6 @@ namespace RumorNetwork.Rumors
 
             position.X += Math.Cos(angle) * distance;
             position.Z += Math.Sin(angle) * distance;
-
             return position;
         }
 
@@ -442,9 +477,18 @@ namespace RumorNetwork.Rumors
 
         private static string CreateTitle(
             RumorRecord record,
-            RumorKnowledgeLevel knowledge
+            RumorKnowledgeLevel knowledge,
+            int? debugToken
         )
         {
+            if (debugToken.HasValue)
+            {
+                return CreateDebugTitle(
+                    record,
+                    debugToken.Value
+                );
+            }
+
             RumorWaypointConfig config =
                 RumorRuntimeSettings.Waypoints;
 
@@ -477,6 +521,36 @@ namespace RumorNetwork.Rumors
                 genericKey,
                 record.Kind.ToString()
             );
+        }
+
+        private static string CreateDebugTitle(
+            RumorRecord record,
+            int debugToken
+        )
+        {
+            Vec3i center = record.CreateLocation().Center;
+            string category = BetterRuinsRumorPolicy.IsBetterRuins(record)
+                ? BetterRuinsRumorPolicy.GetCategoryKey(record)
+                : string.IsNullOrWhiteSpace(record.SourceGroup)
+                    ? "(no-group)"
+                    : record.SourceGroup;
+
+            string sourceCode = string.IsNullOrWhiteSpace(
+                    record.SourceCode
+                )
+                ? "(no-code)"
+                : record.SourceCode;
+
+            if (sourceCode.Length > 48)
+            {
+                sourceCode = sourceCode[..45] + "...";
+            }
+
+            return
+                $"[DBG d{debugToken}] {record.Kind} | " +
+                $"{record.Family} | {category} | " +
+                $"C={center.X},{center.Y},{center.Z} | " +
+                sourceCode;
         }
 
         private static bool IsRuin(
