@@ -15,7 +15,8 @@ namespace RumorNetwork.Structures
 
         private const string BetterRuinsPrefix = "betterruins:";
 
-        private Harmony? harmony;
+        private static Harmony? sharedHarmony;
+        private static bool installed;
 
         public override double ExecuteOrder()
         {
@@ -24,7 +25,13 @@ namespace RumorNetwork.Structures
 
         public override void StartServerSide(ICoreServerAPI api)
         {
-            harmony = new Harmony(HarmonyId);
+            if (installed)
+            {
+                return;
+            }
+
+            installed = true;
+            sharedHarmony = new Harmony(HarmonyId);
 
             var classify = AccessTools.Method(
                 typeof(StructureClassifier),
@@ -39,7 +46,7 @@ namespace RumorNetwork.Structures
 
             if (classify != null)
             {
-                harmony.Patch(
+                sharedHarmony.Patch(
                     classify,
                     prefix: new HarmonyMethod(
                         typeof(BetterRuinsClassificationCompatibilityPatch),
@@ -57,7 +64,7 @@ namespace RumorNetwork.Structures
 
             if (import != null)
             {
-                harmony.Patch(
+                sharedHarmony.Patch(
                     import,
                     prefix: new HarmonyMethod(
                         typeof(BetterRuinsClassificationCompatibilityPatch),
@@ -65,12 +72,17 @@ namespace RumorNetwork.Structures
                     )
                 );
             }
+
+            api.Logger.Notification(
+                "Rumor Network instalou explicitamente a correção de " +
+                "classificação e migração do BetterRuins."
+            );
         }
 
         public override void Dispose()
         {
-            harmony?.UnpatchAll(HarmonyId);
-            harmony = null;
+            // May be installed by RumorNetworkModSystem rather than by
+            // automatic ModSystem discovery. Keep it process-wide.
             base.Dispose();
         }
 
