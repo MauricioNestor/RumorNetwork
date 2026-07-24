@@ -123,18 +123,18 @@ namespace RumorNetwork.Dialogue
         }
 
         private static void SelectCanonicalRoot(
-            IEnumerable<DialogueComponent> components,
+            IEnumerable<DialogueComponent> __0,
             ref DlgTalkComponent? __result
         )
         {
-            __result = FindCanonicalRoot(components);
+            __result = FindCanonicalRoot(__0);
         }
 
         private static bool AllowCanonicalRootOnly(
-            DlgTalkComponent __instance
+            DlgTalkComponent __0
         )
         {
-            if (!IsTradingRootCandidate(__instance))
+            if (!IsTradingRootCandidate(__0))
             {
                 // Internal Rumor Network branches and unrelated components
                 // still need the original hook behavior.
@@ -142,7 +142,7 @@ namespace RumorNetwork.Dialogue
             }
 
             DialogueController? controller =
-                ComponentControllerField?.GetValue(__instance)
+                ComponentControllerField?.GetValue(__0)
                     as DialogueController;
 
             if (
@@ -165,10 +165,10 @@ namespace RumorNetwork.Dialogue
             }
 
             return
-                ReferenceEquals(canonical, __instance) ||
+                ReferenceEquals(canonical, __0) ||
                 string.Equals(
                     canonical.Code,
-                    __instance.Code,
+                    __0.Code,
                     StringComparison.OrdinalIgnoreCase
                 );
         }
