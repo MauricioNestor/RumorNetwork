@@ -25,12 +25,11 @@ namespace RumorNetwork.Rumors
         {
             lock (SyncRoot)
             {
-                int token = nextToken++;
+                int token = nextToken;
 
-                if (nextToken == int.MaxValue)
-                {
-                    nextToken = 1;
-                }
+                nextToken = nextToken >= int.MaxValue - 1
+                    ? 1
+                    : nextToken + 1;
 
                 Snapshots[token] = new RumorDebugDeliverySnapshot(
                     token,
@@ -85,6 +84,7 @@ namespace RumorNetwork.Rumors
             {
                 if (
                     Snapshots.TryGetValue(token, out snapshot) &&
+                    snapshot != null &&
                     string.Equals(
                         snapshot.PlayerUid,
                         playerUid,
