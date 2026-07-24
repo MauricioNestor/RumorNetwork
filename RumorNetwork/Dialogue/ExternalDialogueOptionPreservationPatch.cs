@@ -25,7 +25,8 @@ namespace RumorNetwork.Dialogue
         private static readonly Dictionary<string, RootSnapshot>
             Snapshots = new(StringComparer.Ordinal);
 
-        private Harmony? harmony;
+        private static Harmony? sharedHarmony;
+        private static bool installed;
 
         public override double ExecuteOrder()
         {
@@ -34,7 +35,13 @@ namespace RumorNetwork.Dialogue
 
         public override void Start(ICoreAPI api)
         {
-            harmony = new Harmony(HarmonyId);
+            if (installed)
+            {
+                return;
+            }
+
+            installed = true;
+            sharedHarmony = new Harmony(HarmonyId);
 
             MethodInfo? execute = AccessTools.Method(
                 typeof(DlgTalkComponent),
@@ -59,14 +66,18 @@ namespace RumorNetwork.Dialogue
                 priority = Priority.Last
             };
 
-            harmony.Patch(execute, prefix: prefix);
+            sharedHarmony.Patch(execute, prefix: prefix);
+
+            api.Logger.Notification(
+                "Rumor Network instalou explicitamente a preservação " +
+                "de opções externas de diálogo."
+            );
         }
 
         public override void Dispose()
         {
-            harmony?.UnpatchAll(HarmonyId);
-            harmony = null;
-            Snapshots.Clear();
+            // This patch may be installed manually by the main mod system.
+            // Leave it process-wide until shutdown.
             base.Dispose();
         }
 
