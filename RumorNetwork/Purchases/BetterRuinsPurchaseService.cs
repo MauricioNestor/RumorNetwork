@@ -17,6 +17,7 @@ namespace RumorNetwork.Purchases
         private readonly RumorDeliveryService deliveryService;
         private readonly RumorPriceResolver priceResolver;
         private readonly RumorInventoryPaymentService paymentService;
+        private readonly HashSet<string> physicallyInvalidRecords = new();
 
         public BetterRuinsPurchaseService(
             ICoreServerAPI api,
@@ -67,6 +68,40 @@ namespace RumorNetwork.Purchases
 
             foreach (RumorRecord record in candidates)
             {
+                if (physicallyInvalidRecords.Contains(record.Id))
+                {
+                    continue;
+                }
+
+                StructurePhysicalAuditResult audit =
+                    StructurePhysicalAuditor.Audit(api, record);
+
+                if (!audit.ChunksLoaded)
+                {
+                    api.Logger.VerboseDebug(
+                        $"BetterRuins {record.Id} ignorada por enquanto: " +
+                        "os chunks da bounding box não estão carregados."
+                    );
+                    continue;
+                }
+
+                if (!audit.HasStructuralEvidence)
+                {
+                    physicallyInvalidRecords.Add(record.Id);
+
+                    api.Logger.Warning(
+                        "Rumor Network descartou uma ruína registrada do " +
+                        "BetterRuins sem evidência física de construção. " +
+                        $"Id={record.Id} | SourceCode={record.SourceCode} | " +
+                        $"BoxVolume={audit.DeclaredVolume} | " +
+                        $"Air={audit.AirBlocks} | Natural={audit.NaturalBlocks} | " +
+                        $"Artificial={audit.ArtificialBlocks} | " +
+                        $"BlockEntities={audit.BlockEntities} | " +
+                        $"TopBlocks={audit.FormatTopBlocks()}"
+                    );
+                    continue;
+                }
+
                 bool resolved = targetResolver.TryResolveAll(
                     record,
                     out RumorTargetResolution? resolution,
@@ -91,7 +126,7 @@ namespace RumorNetwork.Purchases
             {
                 error =
                     "Não conheço nenhuma ruína do BetterRuins " +
-                    "que ainda possa indicar.";
+                    "que ainda possa indicar e que exista fisicamente.";
                 return false;
             }
 
