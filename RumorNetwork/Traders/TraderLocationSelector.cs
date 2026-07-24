@@ -6,6 +6,8 @@ namespace RumorNetwork.Traders
 {
     public sealed class TraderLocationSelector
     {
+        private const double MinimumDifferentTraderDistance = 8d;
+
         private readonly RumorRegistry rumorRegistry;
 
         public TraderLocationSelector(
@@ -119,6 +121,10 @@ namespace RumorNetwork.Traders
             Vec3d sellerCenter =
                 CreateCenter(seller);
 
+            double minimumDistanceSquared =
+                MinimumDifferentTraderDistance *
+                MinimumDifferentTraderDistance;
+
             double bestDistanceSquared =
                 double.MaxValue;
 
@@ -145,9 +151,14 @@ namespace RumorNetwork.Traders
                         candidateCenter
                     );
 
+                // A live seller can have a different synthetic id from the
+                // same trader's catalog record. Distance is the reliable way
+                // to keep the seller from revealing itself.
                 if (
+                    candidateDistanceSquared <=
+                        minimumDistanceSquared ||
                     candidateDistanceSquared >=
-                    bestDistanceSquared
+                        bestDistanceSquared
                 )
                 {
                     continue;
