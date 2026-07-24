@@ -6,6 +6,7 @@ using RumorNetwork.Dialogue;
 using RumorNetwork.Offers;
 using RumorNetwork.Purchases;
 using RumorNetwork.Rumors;
+using RumorNetwork.Structures;
 using RumorNetwork.Traders;
 using Vintagestory.API.Common;
 using Vintagestory.API.Server;
@@ -63,6 +64,24 @@ namespace RumorNetwork
                 config,
                 betterRuinsInstalled
             );
+
+            RumorDebugDeliveryRegistry.Clear();
+
+            // These compatibility classes are also valid ModSystems, but
+            // they are installed explicitly here so a stale discovery list
+            // can never silently omit them from the built assembly/runtime.
+            LiveTraderDiscoveryPatch.ConfigureRegistry(
+                rumorRegistry
+            );
+
+            new BetterRuinsClassificationCompatibilityPatch()
+                .StartServerSide(api);
+
+            new LiveTraderDiscoveryPatch()
+                .StartServerSide(api);
+
+            new ExternalDialogueOptionPreservationPatch()
+                .Start(api);
 
             caveCellClassifier =
                 new CaveCellClassifier(
@@ -215,6 +234,7 @@ namespace RumorNetwork
         public override void Dispose()
         {
             RumorDialogueRuntime.Reset();
+            RumorDebugDeliveryRegistry.Clear();
             discoveryService?.Stop();
             base.Dispose();
         }
