@@ -4,6 +4,7 @@ using RumorNetwork.Purchases;
 using RumorNetwork.Rumors;
 using RumorNetwork.Traders;
 using Vintagestory.API.Common;
+using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
@@ -51,7 +52,8 @@ namespace RumorNetwork.Dialogue
 
         public static string Execute(
             IServerPlayer player,
-            string action
+            string action,
+            Entity? npcEntity = null
         )
         {
             if (!Ready)
@@ -64,10 +66,10 @@ namespace RumorNetwork.Dialogue
                 return action switch
                 {
                     "checktrader" =>
-                        CheckTrader(player),
+                        CheckTrader(player, npcEntity),
 
                     "buytrader" =>
-                        BuyTrader(player),
+                        BuyTrader(player, npcEntity),
 
                     "buyapproximate" =>
                         BuyGeneral(
@@ -118,17 +120,19 @@ namespace RumorNetwork.Dialogue
         }
 
         private static string CheckTrader(
-            IServerPlayer player
+            IServerPlayer player,
+            Entity? npcEntity
         )
         {
             ScanLoadedTraders(player);
 
             return traderPurchaseService!
-                .CheckAvailability(player);
+                .CheckAvailability(player, npcEntity);
         }
 
         private static string BuyTrader(
-            IServerPlayer player
+            IServerPlayer player,
+            Entity? npcEntity
         )
         {
             ScanLoadedTraders(player);
@@ -136,6 +140,7 @@ namespace RumorNetwork.Dialogue
             bool purchased =
                 traderPurchaseService!.TryPurchase(
                     player,
+                    npcEntity,
                     out TraderLocationPurchaseResult? result,
                     out string error
                 );
