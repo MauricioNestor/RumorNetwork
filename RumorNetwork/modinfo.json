@@ -1,13 +1,13 @@
 {
-    "$schema": "https://moddbcdn.vintagestory.at/schema/modinfo.latest.json",
-    "type": "Code",
-    "modid": "rumornetwork",
-    "name": "RumorNetwork",
-    "authors": [
-        "Unknown"
-    ],
-    "description": "To be added",
-    "version": "1.0.0",
+  "$schema": "https://moddbcdn.vintagestory.at/schema/modinfo.latest.json",
+  "type": "Code",
+  "modid": "rumornetwork",
+  "name": "Rumor Network",
+  "authors": [
+    "MauricioNestor"
+  ],
+  "description": "Traders sell rumors about other traders, ruins, translocators and BetterRuins structures.",
+  "version": "1.0.0-rc.1",
   "dependencies": {
     "game": "1.22.4"
   }
