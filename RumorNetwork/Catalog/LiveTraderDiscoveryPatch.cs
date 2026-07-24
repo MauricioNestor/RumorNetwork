@@ -40,6 +40,55 @@ namespace RumorNetwork.Catalog
             rumorRegistry = registry;
         }
 
+        public static int ScanLoadedTraders(
+            Vec3d center,
+            float radius = 512f
+        )
+        {
+            ICoreServerAPI? api = serverApi;
+            RumorRegistry? registry = rumorRegistry;
+
+            if (
+                api == null ||
+                registry == null ||
+                center == null ||
+                radius <= 0
+            )
+            {
+                return 0;
+            }
+
+            int before = registry.CountByKind(
+                StructureKind.Trader
+            );
+
+            Entity[] loadedEntities = api.World.GetEntitiesAround(
+                center,
+                radius,
+                radius
+            );
+
+            foreach (Entity entity in loadedEntities)
+            {
+                if (entity is EntityTrader trader)
+                {
+                    Register(trader);
+                }
+            }
+
+            int added = registry.CountByKind(
+                StructureKind.Trader
+            ) - before;
+
+            logger?.Notification(
+                "Rumor Network varreu traders carregados antes do " +
+                $"diálogo. Entidades={loadedEntities.Length} | " +
+                $"Novos traders verificados={Math.Max(0, added)}."
+            );
+
+            return Math.Max(0, added);
+        }
+
         public override double ExecuteOrder()
         {
             return -0.94;
