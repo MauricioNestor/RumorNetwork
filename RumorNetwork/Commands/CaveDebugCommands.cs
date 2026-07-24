@@ -1,4 +1,6 @@
 using RumorNetwork.Caves;
+using RumorNetwork.Rumors;
+using RumorNetwork.Structures;
 using System;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
@@ -69,13 +71,13 @@ namespace RumorNetwork.Commands
             rumorCommand
                 .BeginSubCommand("overlay")
                 .WithDescription(
-                    "Exibe a estrutura inspecionada ou limpa os overlays."
+                    "Exibe uma estrutura inspecionada, um waypoint debug dN, ou limpa overlays."
                 )
                 .RequiresPlayer()
                 .RequiresPrivilege(Privilege.chat)
                 .WithArgs(
                     api.ChatCommands.Parsers.Word(
-                        "indexOrClear"
+                        "indexDebugTokenOrClear"
                     )
                 )
                 .HandleWith(ShowOrClearOverlay)
@@ -240,13 +242,25 @@ namespace RumorNetwork.Commands
                 );
             }
 
+            if (TryParseDebugToken(
+                    requestedTarget,
+                    out int debugToken
+                ))
+            {
+                return ShowDebugDeliveryOverlay(
+                    player,
+                    debugToken
+                );
+            }
+
             if (!int.TryParse(
                     requestedTarget,
                     out int index
                 ) || index < 0)
             {
                 return TextCommandResult.Error(
-                    "Use /rumor overlay [índice] ou " +
+                    "Use /rumor overlay [índice], " +
+                    "/rumor overlay d[token] ou " +
                     "/rumor overlay clear."
                 );
             }
@@ -289,12 +303,139 @@ namespace RumorNetwork.Commands
             );
         }
 
+        private TextCommandResult ShowDebugDeliveryOverlay(
+            IServerPlayer player,
+            int debugToken
+        )
+        {
+            if (!RumorDebugDeliveryRegistry.TryGet(
+                    debugToken,
+                    player.PlayerUID,
+                    out RumorDebugDeliverySnapshot? snapshot
+                ) || snapshot == null)
+            {
+                return TextCommandResult.Error(
+                    $"Token d{debugToken} não existe nesta sessão " +
+                    "para este jogador."
+                );
+            }
+
+            RumorRecord record = snapshot.Record;
+            Cuboidi box = record.CreateLocation();
+            Vec3i center = box.Center;
+
+            CaveBoundaryScanResult? boundaryResult =
+                record.Kind == StructureKind.UndergroundRuin
+                    ? caveBoundaryScanner.Scan(box)
+                    : null;
+
+            debugOverlay.ShowRecord(
+                player,
+                snapshot,
+                boundaryResult
+            );
+
+            string category = BetterRuinsRumorPolicy.IsBetterRuins(record)
+                ? BetterRuinsRumorPolicy.GetCategoryKey(record)
+                : "(not-betterruins)";
+
+            logger.Notification(
+                "=== Rumor Network: purchased rumor debug overlay ==="
+            );
+
+            logger.Notification(
+                $"DebugToken=d{debugToken} | " +
+                $"Knowledge={snapshot.Knowledge} | " +
+                $"Kind={record.Kind} | " +
+                $"Category={category} | " +
+                $"Parts={record.PartCount}"
+            );
+
+            logger.Notification(
+                $"Id={record.Id}"
+            );
+
+            logger.Notification(
+                $"Family={record.Family} | " +
+                $"SourceCode={record.SourceCode} | " +
+                $"SourceGroup={record.SourceGroup}"
+            );
+
+            logger.Notification(
+                $"TrueCenter=({center.X},{center.Y},{center.Z}) | " +
+                $"Box=({box.X1},{box.Y1},{box.Z1})-" +
+                $"({box.X2},{box.Y2},{box.Z2})"
+            );
+
+            for (int index = 0;
+                index < snapshot.Targets.Count;
+                index++)
+            {
+                RumorTarget target = snapshot.Targets[index];
+
+                logger.Notification(
+                    $"ResolvedTarget[{index}]=(" +
+                    $"{target.Position.X:0.0}," +
+                    $"{target.Position.Y:0.0}," +
+                    $"{target.Position.Z:0.0}) | " +
+                    $"TargetKind={target.Kind}"
+                );
+            }
+
+            for (int index = 0;
+                index < snapshot.WaypointPositions.Count;
+                index++)
+            {
+                Vec3d position =
+                    snapshot.WaypointPositions[index];
+
+                logger.Notification(
+                    $"Waypoint[{index}]=(" +
+                    $"{position.X:0.0}," +
+                    $"{position.Y:0.0}," +
+                    $"{position.Z:0.0})"
+                );
+            }
+
+            if (boundaryResult != null)
+            {
+                CaveBoundaryDebugReporter.Log(
+                    logger,
+                    boundaryResult
+                );
+            }
+
+            return TextCommandResult.Success(
+                $"Overlay d{debugToken} exibido. " +
+                "Ciano=box, amarelo=centro, vermelho=alvo resolvido, " +
+                "branco=waypoint; detalhes no console."
+            );
+        }
+
         private TextCommandResult InvalidIndexResult()
         {
             return TextCommandResult.Error(
                 $"Índice inválido. A última inspeção possui " +
                 $"{inspectionState.Count} resultados."
             );
+        }
+
+        private static bool TryParseDebugToken(
+            string requestedTarget,
+            out int token
+        )
+        {
+            token = 0;
+
+            return
+                requestedTarget.Length > 1 &&
+                (requestedTarget[0] == 'd' ||
+                    requestedTarget[0] == 'D') &&
+                int.TryParse(
+                    requestedTarget[1..],
+                    out token
+                ) &&
+                token > 0;
         }
 
         private static TextCommandResult PlayerRequiredResult()
