@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
+using Newtonsoft.Json;
 using Vintagestory.API.Common;
 using Vintagestory.GameContent;
 
@@ -121,48 +122,31 @@ namespace RumorNetwork.Dialogue
                 return;
             }
 
-            snapshot.Remember(externalChoices);
-
             if (!snapshot.RestorePending)
             {
+                // A normal root execution starts or refreshes the dialogue
+                // session. Store fresh independent copies so conditions and
+                // quest state from other mods are not kept stale forever.
+                snapshot.Replace(externalChoices);
                 return;
             }
 
-            List<DialogeTextElement> missing = snapshot.Choices
-                .Where(saved => !current.Any(candidate =>
-                    SameChoice(saved, candidate)
-                ))
-                .ToList();
+            List<DialogeTextElement> restored =
+                snapshot.CreateCopies();
 
-            snapshot.RestorePending = false;
-
-            if (missing.Count == 0)
-            {
-                return;
-            }
-
-            int firstRumorNetworkChoice = current.FindIndex(
-                IsRumorNetworkChoice
+            restored.AddRange(
+                current
+                    .Where(IsRumorNetworkChoice)
+                    .Select(CloneChoice)
             );
 
-            if (firstRumorNetworkChoice < 0)
-            {
-                current.AddRange(missing);
-            }
-            else
-            {
-                current.InsertRange(
-                    firstRumorNetworkChoice,
-                    missing
-                );
-            }
-
-            __instance.Text = current.ToArray();
+            snapshot.RestorePending = false;
+            __instance.Text = restored.ToArray();
 
             controller.NPCEntity.Api.Logger.Notification(
-                "Rumor Network restaurou " +
-                $"{missing.Count} opção(ões) externas do diálogo de " +
-                $"{controller.NPCEntity.Code}."
+                "Rumor Network reconstruiu o menu raiz com " +
+                $"{snapshot.Count} opção(ões) externas independentes " +
+                $"para {controller.NPCEntity.Code}."
             );
         }
 
@@ -224,50 +208,52 @@ namespace RumorNetwork.Dialogue
             ) == true;
         }
 
-        private static bool SameChoice(
-            DialogeTextElement first,
-            DialogeTextElement second
+        private static DialogeTextElement CloneChoice(
+            DialogeTextElement choice
         )
         {
-            return
-                string.Equals(
-                    first.JumpTo,
-                    second.JumpTo,
-                    StringComparison.OrdinalIgnoreCase
-                ) &&
-                string.Equals(
-                    first.Value,
-                    second.Value,
-                    StringComparison.Ordinal
-                );
+            try
+            {
+                string json = JsonConvert.SerializeObject(choice);
+
+                return JsonConvert.DeserializeObject<DialogeTextElement>(
+                    json
+                ) ?? choice;
+            }
+            catch
+            {
+                // A shallow fallback is still preferable to deleting an
+                // option. Normal BetterRuins dialogue elements serialize.
+                return choice;
+            }
         }
 
         private sealed class RootSnapshot
         {
-            public List<DialogeTextElement> Choices { get; } = new();
+            private readonly List<DialogeTextElement> choices = new();
+
+            public int Count => choices.Count;
 
             public bool RestorePending { get; set; }
 
             public RootSnapshot(
-                IEnumerable<DialogeTextElement> choices
+                IEnumerable<DialogeTextElement> source
             )
             {
-                Remember(choices);
+                Replace(source);
             }
 
-            public void Remember(
-                IEnumerable<DialogeTextElement> choices
+            public void Replace(
+                IEnumerable<DialogeTextElement> source
             )
             {
-                foreach (DialogeTextElement choice in choices)
-                {
-                    if (!Choices.Any(saved =>
-                            SameChoice(saved, choice)
-                        ))
-                    {
-                        Choices.Add(choice);
-                    }
-                }
+                choices.Clear();
+                choices.AddRange(source.Select(CloneChoice));
+            }
+
+            public List<DialogeTextElement> CreateCopies()
+            {
+                return choices.Select(CloneChoice).ToList();
             }
         }
     }
