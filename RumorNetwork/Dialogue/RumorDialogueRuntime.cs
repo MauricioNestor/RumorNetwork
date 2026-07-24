@@ -8,6 +8,7 @@ using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
+using Vintagestory.GameContent;
 
 namespace RumorNetwork.Dialogue
 {
@@ -125,6 +126,7 @@ namespace RumorNetwork.Dialogue
         )
         {
             ScanLoadedTraders(player);
+            npcEntity ??= ResolveNearbySellerEntity(player);
 
             return traderPurchaseService!
                 .CheckAvailability(player, npcEntity);
@@ -136,6 +138,7 @@ namespace RumorNetwork.Dialogue
         )
         {
             ScanLoadedTraders(player);
+            npcEntity ??= ResolveNearbySellerEntity(player);
 
             bool purchased =
                 traderPurchaseService!.TryPurchase(
@@ -197,6 +200,26 @@ namespace RumorNetwork.Dialogue
             }
 
             return "none";
+        }
+
+        private static Entity? ResolveNearbySellerEntity(
+            IServerPlayer player
+        )
+        {
+            Vec3d position = new(
+                player.Entity.Pos.X,
+                player.Entity.Pos.Y,
+                player.Entity.Pos.Z
+            );
+
+            return player.Entity.Api.World.GetNearestEntity(
+                position,
+                12f,
+                8f,
+                entity =>
+                    entity is EntityTradingHumanoid &&
+                    entity.Alive
+            );
         }
 
         private static void ScanLoadedTraders(
