@@ -48,11 +48,6 @@ namespace RumorNetwork.Dialogue
                 typeof(BetterRuinsDialogueHook),
                 "BeforeTalkComponentExecutes"
             );
-            PatchRuntimeHookGuard(
-                api,
-                typeof(ExternalDialogueOptionPreservationPatch),
-                "BeforeTalkComponentExecutes"
-            );
 
             api.Logger.Notification(
                 "Rumor Network instalou a seleção canônica da raiz " +
