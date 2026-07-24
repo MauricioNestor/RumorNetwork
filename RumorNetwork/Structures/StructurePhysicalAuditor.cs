@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using RumorNetwork.Rumors;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 
