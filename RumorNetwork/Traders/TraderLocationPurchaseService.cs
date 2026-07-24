@@ -1,11 +1,14 @@
+using System;
 using System.Collections.Generic;
 using RumorNetwork.Catalog;
 using RumorNetwork.Configuration;
 using RumorNetwork.Purchases;
 using RumorNetwork.Rumors;
 using Vintagestory.API.Common;
+using Vintagestory.API.Common.Entities;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
+using Vintagestory.GameContent;
 
 namespace RumorNetwork.Traders
 {
@@ -49,6 +52,14 @@ namespace RumorNetwork.Traders
             IServerPlayer player
         )
         {
+            return CheckAvailability(player, null);
+        }
+
+        public string CheckAvailability(
+            IServerPlayer player,
+            Entity? sellerEntity
+        )
+        {
             if (!config.TraderLocations.Enabled)
             {
                 return "none";
@@ -60,14 +71,12 @@ namespace RumorNetwork.Traders
                 player.Entity.Pos.Z
             );
 
-            bool sellerFound =
-                selector.TryFindSeller(
-                    playerPosition,
-                    config.TraderLocations
-                        .SellerMatchRadius,
-                    out RumorRecord? seller,
-                    out _
-                );
+            bool sellerFound = TryResolveSeller(
+                playerPosition,
+                sellerEntity,
+                out RumorRecord? seller,
+                out _
+            );
 
             if (!sellerFound || seller == null)
             {
@@ -130,6 +139,21 @@ namespace RumorNetwork.Traders
             out string error
         )
         {
+            return TryPurchase(
+                player,
+                null,
+                out result,
+                out error
+            );
+        }
+
+        public bool TryPurchase(
+            IServerPlayer player,
+            Entity? sellerEntity,
+            out TraderLocationPurchaseResult? result,
+            out string error
+        )
+        {
             result = null;
             error = string.Empty;
 
@@ -148,14 +172,12 @@ namespace RumorNetwork.Traders
                 player.Entity.Pos.Z
             );
 
-            bool sellerFound =
-                selector.TryFindSeller(
-                    playerPosition,
-                    config.TraderLocations
-                        .SellerMatchRadius,
-                    out RumorRecord? seller,
-                    out double sellerDistance
-                );
+            bool sellerFound = TryResolveSeller(
+                playerPosition,
+                sellerEntity,
+                out RumorRecord? seller,
+                out double sellerDistance
+            );
 
             if (!sellerFound || seller == null)
             {
@@ -166,7 +188,7 @@ namespace RumorNetwork.Traders
                 );
 
                 error =
-                    "Nenhum comerciante verificado foi encontrado " +
+                    "Nenhum comerciante vendedor foi encontrado " +
                     $"a até {config.TraderLocations.SellerMatchRadius:0} " +
                     "blocos. A descoberta por worldgen temporário " +
                     "foi acionada; aguarde e tente novamente.";
@@ -393,6 +415,128 @@ namespace RumorNetwork.Traders
             );
 
             return true;
+        }
+
+        private bool TryResolveSeller(
+            Vec3d playerPosition,
+            Entity? sellerEntity,
+            out RumorRecord? seller,
+            out double distance
+        )
+        {
+            if (
+                sellerEntity is EntityTradingHumanoid &&
+                TryCreateLiveSeller(
+                    playerPosition,
+                    sellerEntity,
+                    out seller,
+                    out distance
+                )
+            )
+            {
+                return true;
+            }
+
+            return selector.TryFindSeller(
+                playerPosition,
+                config.TraderLocations.SellerMatchRadius,
+                out seller,
+                out distance
+            );
+        }
+
+        private bool TryCreateLiveSeller(
+            Vec3d playerPosition,
+            Entity sellerEntity,
+            out RumorRecord? seller,
+            out double distance
+        )
+        {
+            seller = null;
+            distance = 0;
+
+            double deltaX =
+                playerPosition.X - sellerEntity.Pos.X;
+
+            double deltaZ =
+                playerPosition.Z - sellerEntity.Pos.Z;
+
+            double distanceSquared =
+                deltaX * deltaX +
+                deltaZ * deltaZ;
+
+            double maximumDistance =
+                config.TraderLocations.SellerMatchRadius;
+
+            if (
+                !sellerEntity.Alive ||
+                distanceSquared > maximumDistance * maximumDistance
+            )
+            {
+                return false;
+            }
+
+            GetStableSellerPosition(
+                sellerEntity,
+                out int x,
+                out int y,
+                out int z
+            );
+
+            string code =
+                sellerEntity.Code?.ToString() ??
+                "live-trader";
+
+            seller = new RumorRecord
+            {
+                Id = $"LiveSeller|{code}|{x}|{y}|{z}",
+                Kind = StructureKind.Trader,
+                Family = sellerEntity.Code?.Path ?? "live-trader",
+                SourceCode = code,
+                SourceGroup = "live-seller",
+                PartCount = 1,
+                Knowledge = RumorKnowledgeLevel.Exact,
+                X1 = x,
+                Y1 = y,
+                Z1 = z,
+                X2 = x + 1,
+                Y2 = y + 1,
+                Z2 = z + 1
+            };
+
+            distance = Math.Sqrt(distanceSquared);
+
+            logger.Debug(
+                "Rumor Network aceitou o NPC da conversa apenas como " +
+                $"vendedor: {seller.Id}. Ele não foi adicionado ao " +
+                "catálogo de destinos."
+            );
+
+            return true;
+        }
+
+        private static void GetStableSellerPosition(
+            Entity entity,
+            out int x,
+            out int y,
+            out int z
+        )
+        {
+            double sourceX = entity.Attributes.HasAttribute("spawnX")
+                ? entity.Attributes.GetDouble("spawnX")
+                : entity.Pos.X;
+
+            double sourceY = entity.Attributes.HasAttribute("spawnY")
+                ? entity.Attributes.GetDouble("spawnY")
+                : entity.Pos.Y;
+
+            double sourceZ = entity.Attributes.HasAttribute("spawnZ")
+                ? entity.Attributes.GetDouble("spawnZ")
+                : entity.Pos.Z;
+
+            x = (int)Math.Floor(sourceX);
+            y = (int)Math.Floor(sourceY);
+            z = (int)Math.Floor(sourceZ);
         }
 
         private bool FailAndRefund(
