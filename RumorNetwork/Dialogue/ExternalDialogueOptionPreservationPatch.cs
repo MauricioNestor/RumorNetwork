@@ -229,23 +229,17 @@ namespace RumorNetwork.Dialogue
             DialogeTextElement second
         )
         {
-            if (
-                !string.IsNullOrEmpty(first.JumpTo) ||
-                !string.IsNullOrEmpty(second.JumpTo)
-            )
-            {
-                return string.Equals(
+            return
+                string.Equals(
                     first.JumpTo,
                     second.JumpTo,
                     StringComparison.OrdinalIgnoreCase
+                ) &&
+                string.Equals(
+                    first.Value,
+                    second.Value,
+                    StringComparison.Ordinal
                 );
-            }
-
-            return string.Equals(
-                first.Value,
-                second.Value,
-                StringComparison.Ordinal
-            );
         }
 
         private sealed class RootSnapshot
