@@ -30,8 +30,15 @@ namespace RumorNetwork.Catalog
         private static ICoreServerAPI? serverApi;
         private static ILogger? logger;
         private static RumorRegistry? rumorRegistry;
+        private static Harmony? sharedHarmony;
+        private static bool installed;
 
-        private Harmony? harmony;
+        public static void ConfigureRegistry(
+            RumorRegistry registry
+        )
+        {
+            rumorRegistry = registry;
+        }
 
         public override double ExecuteOrder()
         {
@@ -42,7 +49,14 @@ namespace RumorNetwork.Catalog
         {
             serverApi = api;
             logger = api.Logger;
-            harmony = new Harmony(HarmonyId);
+
+            if (installed)
+            {
+                return;
+            }
+
+            installed = true;
+            sharedHarmony = new Harmony(HarmonyId);
 
             MethodInfo? modStart = AccessTools.Method(
                 typeof(RumorNetworkModSystem),
@@ -68,7 +82,7 @@ namespace RumorNetwork.Catalog
 
             if (modStart != null)
             {
-                harmony.Patch(
+                sharedHarmony.Patch(
                     modStart,
                     postfix: new HarmonyMethod(
                         typeof(LiveTraderDiscoveryPatch),
@@ -79,7 +93,7 @@ namespace RumorNetwork.Catalog
 
             if (entityInitialize != null)
             {
-                harmony.Patch(
+                sharedHarmony.Patch(
                     entityInitialize,
                     postfix: new HarmonyMethod(
                         typeof(LiveTraderDiscoveryPatch),
@@ -97,7 +111,7 @@ namespace RumorNetwork.Catalog
 
             if (availabilityExecute != null)
             {
-                harmony.Patch(
+                sharedHarmony.Patch(
                     availabilityExecute,
                     prefix: new HarmonyMethod(
                         typeof(LiveTraderDiscoveryPatch),
@@ -105,15 +119,19 @@ namespace RumorNetwork.Catalog
                     )
                 );
             }
+
+            api.Logger.Notification(
+                "Rumor Network instalou explicitamente a descoberta " +
+                "imediata de traders vivos."
+            );
         }
 
         public override void Dispose()
         {
-            harmony?.UnpatchAll(HarmonyId);
-            harmony = null;
-            rumorRegistry = null;
-            serverApi = null;
-            logger = null;
+            // The patch is process-wide and may have been installed by the
+            // main mod system rather than this automatically discovered
+            // ModSystem instance. It is intentionally left installed until
+            // process shutdown.
             base.Dispose();
         }
 
