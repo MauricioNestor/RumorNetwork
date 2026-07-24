@@ -1,9 +1,11 @@
 using System;
+using RumorNetwork.Catalog;
 using RumorNetwork.Purchases;
 using RumorNetwork.Rumors;
 using RumorNetwork.Traders;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
+using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 
 namespace RumorNetwork.Dialogue
@@ -119,6 +121,8 @@ namespace RumorNetwork.Dialogue
             IServerPlayer player
         )
         {
+            ScanLoadedTraders(player);
+
             return traderPurchaseService!
                 .CheckAvailability(player);
         }
@@ -127,6 +131,8 @@ namespace RumorNetwork.Dialogue
             IServerPlayer player
         )
         {
+            ScanLoadedTraders(player);
+
             bool purchased =
                 traderPurchaseService!.TryPurchase(
                     player,
@@ -186,6 +192,19 @@ namespace RumorNetwork.Dialogue
             }
 
             return "none";
+        }
+
+        private static void ScanLoadedTraders(
+            IServerPlayer player
+        )
+        {
+            LiveTraderDiscoveryPatch.ScanLoadedTraders(
+                new Vec3d(
+                    player.Entity.Pos.X,
+                    player.Entity.Pos.Y,
+                    player.Entity.Pos.Z
+                )
+            );
         }
 
         private static string BuyGeneral(
