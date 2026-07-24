@@ -1,4 +1,5 @@
 using RumorNetwork.Caves;
+using RumorNetwork.Rumors;
 using System.Collections.Generic;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -13,6 +14,8 @@ namespace RumorNetwork.Commands
         private const int CenterSlot = 91702;
         private const int InsideOpeningSlot = 91703;
         private const int OutsideOpeningSlot = 91704;
+        private const int ResolvedTargetSlot = 91705;
+        private const int WaypointSlot = 91706;
 
         private static readonly int BoundingBoxColor =
             ColorUtil.ToRgba(60, 0, 220, 255);
@@ -25,6 +28,12 @@ namespace RumorNetwork.Commands
 
         private static readonly int OutsideOpeningColor =
             ColorUtil.ToRgba(90, 80, 140, 255);
+
+        private static readonly int ResolvedTargetColor =
+            ColorUtil.ToRgba(140, 255, 80, 80);
+
+        private static readonly int WaypointColor =
+            ColorUtil.ToRgba(140, 255, 255, 255);
 
         private readonly ICoreServerAPI api;
 
@@ -41,10 +50,63 @@ namespace RumorNetwork.Commands
             CaveBoundaryScanResult boundaryResult
         )
         {
-            Clear(player);
+            ShowCore(
+                player,
+                boundaryResult.ScannedBox,
+                structure.Location.Center,
+                boundaryResult,
+                new List<BlockPos>(),
+                new List<BlockPos>()
+            );
+        }
 
-            Cuboidi box = boundaryResult.ScannedBox;
-            Vec3i center = structure.Location.Center;
+        public void ShowRecord(
+            IServerPlayer player,
+            RumorDebugDeliverySnapshot snapshot,
+            CaveBoundaryScanResult? boundaryResult
+        )
+        {
+            Cuboidi structureBox =
+                snapshot.Record.CreateLocation();
+
+            List<BlockPos> resolvedTargets = new();
+
+            foreach (RumorTarget target in snapshot.Targets)
+            {
+                resolvedTargets.Add(
+                    ToBlockPos(target.Position)
+                );
+            }
+
+            List<BlockPos> waypointPositions = new();
+
+            foreach (Vec3d position in snapshot.WaypointPositions)
+            {
+                waypointPositions.Add(
+                    ToBlockPos(position)
+                );
+            }
+
+            ShowCore(
+                player,
+                boundaryResult?.ScannedBox ?? structureBox,
+                structureBox.Center,
+                boundaryResult,
+                resolvedTargets,
+                waypointPositions
+            );
+        }
+
+        private void ShowCore(
+            IServerPlayer player,
+            Cuboidi box,
+            Vec3i center,
+            CaveBoundaryScanResult? boundaryResult,
+            List<BlockPos> resolvedTargets,
+            List<BlockPos> waypointPositions
+        )
+        {
+            Clear(player);
 
             Highlight(
                 player,
@@ -86,18 +148,21 @@ namespace RumorNetwork.Commands
             List<BlockPos> insideOpenings = new();
             List<BlockPos> outsideOpenings = new();
 
-            foreach (
-                CaveBoundaryOpening opening
-                in boundaryResult.Openings
-            )
+            if (boundaryResult != null)
             {
-                insideOpenings.Add(
-                    opening.InsidePosition
-                );
+                foreach (
+                    CaveBoundaryOpening opening
+                    in boundaryResult.Openings
+                )
+                {
+                    insideOpenings.Add(
+                        opening.InsidePosition
+                    );
 
-                outsideOpenings.Add(
-                    opening.OutsidePosition
-                );
+                    outsideOpenings.Add(
+                        opening.OutsidePosition
+                    );
+                }
             }
 
             Highlight(
@@ -117,6 +182,24 @@ namespace RumorNetwork.Commands
                 EnumHighlightShape.Arbitrary,
                 1f
             );
+
+            Highlight(
+                player,
+                ResolvedTargetSlot,
+                resolvedTargets,
+                ResolvedTargetColor,
+                EnumHighlightShape.Arbitrary,
+                1.25f
+            );
+
+            Highlight(
+                player,
+                WaypointSlot,
+                waypointPositions,
+                WaypointColor,
+                EnumHighlightShape.Arbitrary,
+                1.4f
+            );
         }
 
         public void Clear(
@@ -127,6 +210,8 @@ namespace RumorNetwork.Commands
             ClearSlot(player, CenterSlot);
             ClearSlot(player, InsideOpeningSlot);
             ClearSlot(player, OutsideOpeningSlot);
+            ClearSlot(player, ResolvedTargetSlot);
+            ClearSlot(player, WaypointSlot);
         }
 
         private void Highlight(
@@ -173,6 +258,17 @@ namespace RumorNetwork.Commands
                 new List<BlockPos>(),
                 EnumHighlightBlocksMode.Absolute,
                 EnumHighlightShape.Arbitrary
+            );
+        }
+
+        private static BlockPos ToBlockPos(
+            Vec3d position
+        )
+        {
+            return new BlockPos(
+                (int)System.Math.Floor(position.X),
+                (int)System.Math.Floor(position.Y),
+                (int)System.Math.Floor(position.Z)
             );
         }
     }
